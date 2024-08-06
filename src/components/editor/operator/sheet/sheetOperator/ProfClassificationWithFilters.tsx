@@ -73,7 +73,7 @@ export const ProfClassificationWithFilters: FC<
         <Button minimal icon="filter-list" />
       </Popover2>
       <OperatorMutipleSelect />
-      <OperatorBackToTop {...{ toTop }} />
+      <OperatorBackToTop />
     </div>
   )
 
