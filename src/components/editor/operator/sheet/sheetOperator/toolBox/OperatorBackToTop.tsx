@@ -7,11 +7,9 @@ import {
   useOperatorFilterProvider,
 } from '../SheetOperatorFilterProvider'
 
-export interface OperatorBackToTopProp {
-  toTop: () => void
-}
+export interface OperatorBackToTopProp {}
 
-export const OperatorBackToTop: FC<OperatorBackToTopProp> = ({ toTop }) => {
+export const OperatorBackToTop: FC<OperatorBackToTopProp> = () => {
   const {
     usePaginationFilterState: [{ current }, setPaginationFilter],
   } = useOperatorFilterProvider()
