@@ -19,24 +19,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/setup@v2
 
       - name: Setup Node.js environment
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
-          cache: 'yarn'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Update static
         run: |
-          yarn scripts:update
+          pnpm scripts:update
 
       - name: Create Pull Request
         id: cpr
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: 'chore: update generated assets [skip ci]'
@@ -49,9 +52,8 @@ jobs:
           labels: |
             scripts/update
           assignees: |
-            GalvinGao
-          reviewers: |
-            GalvinGao
+            MistEO
+            Constrat
 
       - name: Print Pull Request URL
         run: echo "Created Pull Request at ${{ steps.cpr.outputs.pull-request-url }}"

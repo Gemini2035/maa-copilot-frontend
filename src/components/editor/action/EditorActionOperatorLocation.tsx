@@ -6,6 +6,7 @@ import { useController } from 'react-hook-form'
 import { EditorFieldProps } from 'components/editor/EditorFieldProps'
 import type { CopilotDocV1 } from 'models/copilot.schema'
 
+import { useTranslation } from '../../../i18n/i18n'
 import { Level } from '../../../models/operation'
 import { useMessage } from '../../../utils/messenger'
 import { FieldResetButton } from '../../FieldResetButton'
@@ -13,8 +14,7 @@ import { FormField2 } from '../../FormField'
 import { useFloatingMap } from '../floatingMap/FloatingMapContext'
 import { MAP_ORIGIN, TileClickMessage } from '../floatingMap/connection'
 
-interface EditorActionOperatorLocationProps
-  extends EditorFieldProps<CopilotDocV1.Action, [number, number]> {
+interface EditorActionOperatorLocationProps extends EditorFieldProps<CopilotDocV1.Action, [number, number]> {
   actionType: CopilotDocV1.Type
   level?: Level
 }
@@ -27,6 +27,7 @@ export const EditorActionOperatorLocation = ({
   rules,
   ...controllerProps
 }: EditorActionOperatorLocationProps) => {
+  const t = useTranslation()
   const isRequired = actionType === 'Deploy'
 
   const {
@@ -36,26 +37,20 @@ export const EditorActionOperatorLocation = ({
     name,
     control,
     rules: {
-      required: isRequired && '必须填写位置',
+      required: isRequired && t.components.editor.action.EditorActionOperatorLocation.location_required,
       validate: (v) => {
         // v being undefined is allowed because the `required` rule will handle it properly
         if (v) {
-          if (
-            !(
-              Array.isArray(v) &&
-              v.length === 2 &&
-              v.every((i) => i >= 0 && Number.isFinite(i))
-            )
-          ) {
-            return '位置不是有效的数字'
+          if (!(Array.isArray(v) && v.length === 2 && v.every((i) => i >= 0 && Number.isFinite(i)))) {
+            return t.components.editor.action.EditorActionOperatorLocation.invalid_location
           }
 
           if (level) {
             if (v[0] >= level.width) {
-              return `X 坐标超出地图范围 (0-${level.width - 1})`
+              return t.components.editor.action.EditorActionOperatorLocation.x_out_of_range({ max: level.width - 1 })
             }
             if (v[1] >= level.height) {
-              return `Y 坐标超出地图范围 (0-${level.height - 1})`
+              return t.components.editor.action.EditorActionOperatorLocation.y_out_of_range({ max: level.height - 1 })
             }
           }
         }
@@ -66,10 +61,7 @@ export const EditorActionOperatorLocation = ({
     ...controllerProps,
   })
 
-  const transform: Record<
-    string,
-    (v?: number) => [number | undefined, number | undefined]
-  > = {
+  const transform: Record<string, (v?: number) => [number | undefined, number | undefined]> = {
     fromX: (v) => [v, value?.[1]],
     fromY: (v) => [value?.[0], v],
   }
@@ -103,43 +95,33 @@ export const EditorActionOperatorLocation = ({
 
   return (
     <FormField2
-      label="干员位置"
+      label={t.components.editor.action.EditorActionOperatorLocation.operator_location}
       field="location"
       asterisk={isRequired}
       error={errors[name]}
-      description="填完关卡名后开一局，会在目录下 map 文件夹中生成地图坐标图片"
+      description={t.components.editor.action.EditorActionOperatorLocation.map_location_description}
       className="mr-4"
       FormGroupProps={{
-        helperText: '可在地图上点击以选择位置',
+        helperText: t.components.editor.action.EditorActionOperatorLocation.click_on_map,
       }}
     >
       <div className="flex">
         <InputGroup
-          onChange={(v) =>
-            onChange(transform.fromX(castInteger(v.target.value)))
-          }
+          onChange={(v) => onChange(transform.fromX(castInteger(v.target.value)))}
           value={value?.[0]?.toString() ?? ''}
-          placeholder="X 坐标"
+          placeholder={t.components.editor.action.EditorActionOperatorLocation.x_coordinate}
           className="mr-2"
           rightElement={
-            <FieldResetButton
-              disabled={value?.[0] === undefined}
-              onReset={() => reset(transform.fromX(undefined))}
-            />
+            <FieldResetButton disabled={value?.[0] === undefined} onReset={() => reset(transform.fromX(undefined))} />
           }
           onFocus={(e) => e.target.select()}
         />
         <InputGroup
-          onChange={(v) =>
-            onChange(transform.fromY(castInteger(v.target.value)))
-          }
+          onChange={(v) => onChange(transform.fromY(castInteger(v.target.value)))}
           value={value?.[1]?.toString() ?? ''}
-          placeholder="Y 坐标"
+          placeholder={t.components.editor.action.EditorActionOperatorLocation.y_coordinate}
           rightElement={
-            <FieldResetButton
-              disabled={value?.[1] === undefined}
-              onReset={() => reset(transform.fromY(undefined))}
-            />
+            <FieldResetButton disabled={value?.[1] === undefined} onReset={() => reset(transform.fromY(undefined))} />
           }
           onFocus={(e) => e.target.select()}
         />

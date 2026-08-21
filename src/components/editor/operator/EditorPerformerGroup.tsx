@@ -1,36 +1,27 @@
 import { Button, Callout, InputGroup } from '@blueprintjs/core'
 
 import { useEffect } from 'react'
-import {
-  FieldErrors,
-  SubmitHandler,
-  UseFormSetError,
-  useForm,
-} from 'react-hook-form'
+import { SubmitHandler, UseFormSetError, useForm } from 'react-hook-form'
 
 import { CardTitle } from 'components/CardTitle'
 import { FormField } from 'components/FormField'
 import { EditorResetButton } from 'components/editor/EditorResetButton'
+import { FormError } from 'components/editor/FormError'
+import { FormSubmitButton } from 'components/editor/FormSubmitButton'
 import type { CopilotDocV1 } from 'models/copilot.schema'
 
+import { useTranslation } from '../../../i18n/i18n'
 import { FactItem } from '../../FactItem'
 
 export interface EditorPerformerGroupProps {
   group?: CopilotDocV1.Group
-  submit: (
-    group: CopilotDocV1.Group,
-    setError: UseFormSetError<CopilotDocV1.Group>,
-  ) => boolean
+  submit: (group: CopilotDocV1.Group, setError?: UseFormSetError<CopilotDocV1.Group>, fromSheet?: boolean) => boolean
   onCancel: () => void
   categorySelector: JSX.Element
 }
 
-export const EditorPerformerGroup = ({
-  group,
-  submit,
-  onCancel,
-  categorySelector,
-}: EditorPerformerGroupProps) => {
+export const EditorPerformerGroup = ({ group, submit, onCancel, categorySelector }: EditorPerformerGroupProps) => {
+  const t = useTranslation()
   const isNew = !group
 
   const {
@@ -57,8 +48,6 @@ export const EditorPerformerGroup = ({
     }
   }
 
-  const globalError = (errors as FieldErrors<{ global: void }>).global?.message
-
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <div className="flex items-center mb-4">
@@ -68,50 +57,57 @@ export const EditorPerformerGroup = ({
 
         <div className="flex-1" />
 
-        <EditorResetButton reset={reset} entityName="正在编辑的干员组" />
+        <EditorResetButton
+          reset={reset}
+          entityName={t.components.editor.operator.EditorPerformerGroup.editing_operator_group}
+        />
       </div>
 
       <Callout className="mb-4">
         <FactItem
           dense
           icon="info-sign"
-          title="什么是干员组？"
+          title={t.components.editor.operator.EditorPerformerGroup.what_is_group}
           className="font-bold"
         />
-        <div>编队时将选择组内练度最高的一位干员；组内前后顺序并不影响判断</div>
+        <div>{t.components.editor.operator.EditorPerformerGroup.group_explanation}</div>
       </Callout>
 
       <FormField
-        label="干员组名"
+        label={t.components.editor.operator.EditorPerformerGroup.group_name}
         field="name"
         control={control}
         error={errors.name}
-        description="任意名称，用于在动作中引用。例如：速狙、群奶"
+        description={t.components.editor.operator.EditorPerformerGroup.name_description}
         ControllerProps={{
-          rules: { validate: (value) => !!value.trim() || '请输入干员组名' },
+          rules: {
+            validate: (value) => !!value.trim() || t.components.editor.operator.EditorPerformerGroup.name_required,
+          },
           render: ({ field }) => (
-            <InputGroup large placeholder="干员组名" {...field} />
+            <InputGroup
+              large
+              placeholder={t.components.editor.operator.EditorPerformerGroup.name_placeholder}
+              {...field}
+            />
           ),
         }}
       />
 
       <div className="flex">
-        <Button intent="primary" type="submit" icon={isNew ? 'add' : 'edit'}>
-          {isNew ? '添加' : '保存'}
-        </Button>
+        <FormSubmitButton control={control} icon={isNew ? 'add' : 'edit'}>
+          {isNew
+            ? t.components.editor.operator.EditorPerformerGroup.add
+            : t.components.editor.operator.EditorPerformerGroup.save}
+        </FormSubmitButton>
 
         {!isNew && (
           <Button icon="cross" className="ml-2" onClick={onCancel}>
-            取消编辑
+            {t.components.editor.operator.EditorPerformerGroup.cancel_edit}
           </Button>
         )}
       </div>
 
-      {globalError && (
-        <Callout intent="danger" className="mt-2">
-          {globalError}
-        </Callout>
-      )}
+      <FormError errors={errors} />
     </form>
   )
 }

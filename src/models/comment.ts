@@ -1,27 +1,8 @@
+import { CommentsInfo, SubCommentsInfo } from 'zoot-plus-client'
+
 export type CommentInfo = MainCommentInfo | SubCommentInfo
-
-export interface MainCommentInfo {
-  commentId: string
-  uploader: string
-  uploaderId: string
-  message: string
-  uploadTime: string
-  like: number
-  subCommentsInfos: SubCommentInfo[]
-}
-
-export interface SubCommentInfo {
-  commentId: string
-  uploader: string
-  uploaderId: string
-  uploadTime: string
-  like: number
-  message: string
-  fromCommentId: string
-  replyTo: string
-  mainCommentId: string
-  deleted?: boolean
-}
+export type MainCommentInfo = CommentsInfo
+export type SubCommentInfo = SubCommentsInfo
 
 export const enum CommentRating {
   None = 'None',
@@ -30,10 +11,9 @@ export const enum CommentRating {
 }
 
 export const MAX_COMMENT_LENGTH = 150
+export const AUTHOR_MAX_COMMENT_LENGTH = 500
 
-export function isMainComment(
-  comment: CommentInfo,
-): comment is MainCommentInfo {
+export function isMainComment(comment: CommentInfo): comment is MainCommentInfo {
   return 'subCommentsInfos' in comment
 }
 

@@ -6,7 +6,8 @@ import { clsx } from 'clsx'
 
 import type { CopilotDocV1 } from 'models/copilot.schema'
 
-import { Sortable, SortableItemProps } from '../../dnd'
+import { useTranslation } from '../../../i18n/i18n'
+import { Sortable, SortableItemProps, useStableArray } from '../../dnd'
 import { CardDeleteOption, CardEditOption } from '../CardOptions'
 import { EditorOperatorItem } from './EditorOperatorItem'
 
@@ -22,7 +23,7 @@ interface EditorGroupItemProps extends Partial<SortableItemProps> {
   getOperatorId: (operator: CopilotDocV1.Operator) => UniqueIdentifier
   isOperatorEditing?: (operator: CopilotDocV1.Operator) => boolean
   onOperatorEdit?: (operator: CopilotDocV1.Operator) => void
-  onOperatorRemove?: (index: number) => void
+  onOperatorRemove?: (index: number, operator: CopilotDocV1.Operator) => void
 }
 
 export const EditorGroupItem = ({
@@ -38,16 +39,16 @@ export const EditorGroupItem = ({
   attributes,
   listeners,
 }: EditorGroupItemProps) => {
+  const t = useTranslation()
+  const operatorIds = useStableArray(group.opers?.map(getOperatorId) || [])
+
   return (
     <Card
       elevation={Elevation.TWO}
       className={clsx(editing && 'bg-gray-100', isDragging && 'invisible')}
       style={{ width: 'fit-content' }}
     >
-      <SortableContext
-        items={group.opers?.map(getOperatorId) || []}
-        strategy={verticalListSortingStrategy}
-      >
+      <SortableContext items={operatorIds} strategy={verticalListSortingStrategy}>
         <div className="flex items-start mb-2">
           <Icon
             className="cursor-grab active:cursor-grabbing p-1 -mt-1 -ml-2 rounded-[1px]"
@@ -64,27 +65,27 @@ export const EditorGroupItem = ({
 
         <ul>
           {group.opers?.map((operator, i) => (
-            <li className="mb-2" key={getOperatorId(operator)}>
-              <Sortable
-                id={getOperatorId(operator)}
-                data={{ type: 'operator' }}
-              >
-                {(attrs) => (
-                  <EditorOperatorItem
-                    operator={operator}
-                    editing={isOperatorEditing?.(operator)}
-                    onEdit={() => onOperatorEdit?.(operator)}
-                    onRemove={() => onOperatorRemove?.(i)}
-                    {...attrs}
-                  />
-                )}
-              </Sortable>
-            </li>
+            <Sortable
+              className="mb-2"
+              key={getOperatorId(operator)}
+              id={getOperatorId(operator)}
+              data={{ type: 'operator' }}
+            >
+              {(attrs) => (
+                <EditorOperatorItem
+                  operator={operator}
+                  editing={isOperatorEditing?.(operator)}
+                  onEdit={() => onOperatorEdit?.(operator)}
+                  onRemove={() => onOperatorRemove?.(i, operator)}
+                  {...attrs}
+                />
+              )}
+            </Sortable>
           ))}
         </ul>
 
         {!group.opers?.length && (
-          <NonIdealState>将干员拖拽到此处</NonIdealState>
+          <NonIdealState>{t.components.editor.operator.EditorGroupItem.drag_operators_here}</NonIdealState>
         )}
       </SortableContext>
     </Card>

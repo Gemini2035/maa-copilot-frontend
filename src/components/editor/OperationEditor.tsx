@@ -8,71 +8,60 @@ import {
   InputGroup,
   MenuItem,
   TextArea,
+  Tooltip,
 } from '@blueprintjs/core'
-import { Tooltip2 } from '@blueprintjs/popover2'
 
-import { useLevels } from 'apis/arknights'
+import { useLevels } from 'apis/level'
 import clsx from 'clsx'
 import Fuse from 'fuse.js'
 import { FC, ReactNode, useEffect, useMemo, useState } from 'react'
-import {
-  Control,
-  FieldErrors,
-  UseFormReturn,
-  useController,
-  useWatch,
-} from 'react-hook-form'
+import { Control, FieldErrors, UseFormReturn, useController, useWatch } from 'react-hook-form'
 
 import { FormField, FormField2 } from 'components/FormField'
 import { HelperText } from 'components/HelperText'
 import type { CopilotDocV1 } from 'models/copilot.schema'
-import { Level, OpDifficulty, OpDifficultyBitFlag } from 'models/operation'
+import { CopilotType, Level, OpDifficulty, OpDifficultyBitFlag } from 'models/operation'
 
+import { useTranslation } from '../../i18n/i18n'
 import {
   createCustomLevel,
   findLevelByStageName,
   getPrtsMapUrl,
   getStageIdWithDifficulty,
   hasHardMode,
+  isCustomLevel,
   isHardMode,
   toNormalMode,
 } from '../../models/level'
 import { useBreakpoint } from '../../utils/device'
 import { formatError } from '../../utils/error'
 import { Suggest } from '../Suggest'
+import { CopilotTypePicker, VideoUrlField } from './CopilotTypePicker'
 import { EditorActions } from './action/EditorActions'
 import { FloatingMap } from './floatingMap/FloatingMap'
-import {
-  FloatingMapContext,
-  useFloatingMap,
-} from './floatingMap/FloatingMapContext'
-import {
-  EditorPerformer,
-  EditorPerformerProps,
-} from './operator/EditorPerformer'
+import { FloatingMapContext, useFloatingMap } from './floatingMap/FloatingMapContext'
+import { EditorPerformer, EditorPerformerProps } from './operator/EditorPerformer'
 
 export const StageNameInput: FC<{
   control: Control<CopilotDocV1.Operation, object>
 }> = ({ control }) => {
+  const t = useTranslation()
   const {
     field: { value, onChange, onBlur },
     fieldState,
   } = useController({
     name: 'stageName',
     control,
-    rules: { required: '请输入关卡' },
+    rules: { required: t.components.editor.OperationEditor.stage_required },
   })
 
   // we are going to manually handle loading state so we could show the skeleton state easily,
   // without swapping the actual element.
-  const { data, error: _levelError, isValidating } = useLevels()
-  const loading = isValidating && !data
-  const levelError =
-    _levelError && (data ? '更新关卡失败：' : '') + formatError(_levelError)
+  const { data, error: levelError, isLoading } = useLevels()
 
   const levels = useMemo(
     () =>
-      data?.data
+      data
         // to simplify the list, we only show levels in normal mode
         .filter((level) => !isHardMode(level.stageId))
         .sort((a, b) => a.levelId.localeCompare(b.levelId)) || [],
@@ -99,12 +88,7 @@ export const StageNameInput: FC<{
 
   const difficulty = useWatch({ control, name: 'difficulty' })
   const prtsMapUrl = selectedLevel
-    ? getPrtsMapUrl(
-        getStageIdWithDifficulty(
-          selectedLevel.stageId,
-          difficulty ?? OpDifficulty.UNKNOWN,
-        ),
-      )
+    ? getPrtsMapUrl(getStageIdWithDifficulty(selectedLevel.stageId, difficulty ?? OpDifficulty.UNKNOWN))
     : undefined
 
   // stageName should always be in normal mode
@@ -118,16 +102,16 @@ export const StageNameInput: FC<{
 
   return (
     <FormField2
-      label="关卡"
+      label={t.components.editor.OperationEditor.stage}
       field="stageName"
-      error={levelError || fieldState.error}
+      error={levelError ? formatError(levelError) : fieldState.error}
       asterisk
       FormGroupProps={{
         helperText: (
           <>
-            <p>键入以搜索</p>
-            <p>对于主线、活动关卡：键入关卡代号、关卡中文名或活动名称</p>
-            <p>对于悖论模拟关卡：键入关卡名或干员名</p>
+            <p>{t.components.editor.OperationEditor.type_to_search}</p>
+            <p>{t.components.editor.OperationEditor.for_main_event_stages}</p>
+            <p>{t.components.editor.OperationEditor.for_paradox_stages}</p>
           </>
         ),
       }}
@@ -135,13 +119,11 @@ export const StageNameInput: FC<{
       <div className="flex">
         <Suggest<Level>
           items={levels}
-          itemListPredicate={(query) =>
-            query ? fuse.search(query).map((el) => el.item) : levels
-          }
+          itemListPredicate={(query) => (query ? fuse.search(query).map((el) => el.item) : levels)}
           fieldState={fieldState}
           onReset={() => onChange('')}
-          className={clsx('flex-grow mr-2', loading && 'bp4-skeleton')}
-          disabled={loading}
+          className={clsx('flex-grow mr-2', isLoading && 'bp6-skeleton')}
+          disabled={isLoading}
           itemRenderer={(item, { handleClick, handleFocus, modifiers }) => (
             <MenuItem
               key={item.stageId}
@@ -154,33 +136,33 @@ export const StageNameInput: FC<{
           )}
           selectedItem={selectedLevel}
           onItemSelect={selectLevel}
-          inputValueRenderer={(item) => `${item.catThree} ${item.name}`}
-          noResults={<MenuItem disabled text="没有匹配的关卡" />}
+          inputValueRenderer={(item) =>
+            isCustomLevel(item)
+              ? `${item.name} (${t.components.editor.OperationEditor.custom})`
+              : `${item.catThree} ${item.name}`
+          }
+          noResults={<MenuItem disabled text={t.components.editor.OperationEditor.no_matching_stages} />}
           createNewItemFromQuery={(query) => createCustomLevel(query)}
           createNewItemRenderer={(query, active, handleClick) => (
             <MenuItem
               key="create-new-item"
-              text={`使用自定义关卡名 "${query}"`}
+              text={t.components.editor.OperationEditor.use_custom_stage({
+                query,
+              })}
               icon="text-highlight"
               onClick={handleClick}
               selected={active}
             />
           )}
           inputProps={{
-            placeholder: '关卡',
+            placeholder: t.components.editor.OperationEditor.stage,
             large: true,
             onBlur,
           }}
         />
-        <Tooltip2 placement="top" content="在 PRTS.Map 中查看关卡">
-          <AnchorButton
-            large
-            icon="share"
-            target="_blank"
-            href={prtsMapUrl}
-            disabled={!prtsMapUrl}
-          />
-        </Tooltip2>
+        <Tooltip placement="top" content={t.components.editor.OperationEditor.view_in_prts_map}>
+          <AnchorButton large icon="share" target="_blank" href={prtsMapUrl} disabled={!prtsMapUrl} />
+        </Tooltip>
       </div>
     </FormField2>
   )
@@ -189,6 +171,7 @@ export const StageNameInput: FC<{
 const DifficultyPicker: FC<{
   control: Control<CopilotDocV1.Operation>
 }> = ({ control }) => {
+  const t = useTranslation()
   const {
     field: { value = OpDifficulty.UNKNOWN, onChange },
     fieldState: { error },
@@ -198,11 +181,19 @@ const DifficultyPicker: FC<{
   })
 
   const stageName = useWatch({ control, name: 'stageName' })
-  const levels = useLevels().data?.data || []
-  const invalid = useMemo(
-    () => !hasHardMode(levels, stageName),
-    [levels, stageName],
-  )
+  const { data: levels } = useLevels()
+  const invalid = useMemo(() => {
+    // if the stageName is a custom level, we always allow setting difficulty
+    if (!findLevelByStageName(levels, stageName)) {
+      return false
+    }
+
+    if (hasHardMode(levels, stageName)) {
+      return false
+    }
+
+    return true
+  }, [levels, stageName])
 
   useEffect(() => {
     if (invalid && value !== OpDifficulty.UNKNOWN) {
@@ -216,10 +207,10 @@ const DifficultyPicker: FC<{
 
   return (
     <FormField2
-      label="关卡难度"
-      description="在作业上显示的难度标识，如果不选择则不显示"
+      label={t.components.editor.OperationEditor.stage_difficulty}
+      description={t.components.editor.OperationEditor.difficulty_description}
       FormGroupProps={{
-        helperText: invalid ? '该关卡没有突袭难度，无需选择' : '',
+        helperText: invalid ? t.components.editor.OperationEditor.no_challenge_mode : '',
       }}
       field="difficulty"
       error={error}
@@ -230,14 +221,14 @@ const DifficultyPicker: FC<{
           active={!!(value & OpDifficultyBitFlag.REGULAR)}
           onClick={() => toggle(OpDifficultyBitFlag.REGULAR)}
         >
-          普通
+          {t.components.editor.OperationEditor.normal}
         </Button>
         <Button
           disabled={invalid}
           active={!!(value & OpDifficultyBitFlag.HARD)}
           onClick={() => toggle(OpDifficultyBitFlag.HARD)}
         >
-          突袭
+          {t.components.editor.OperationEditor.challenge}
         </Button>
       </ButtonGroup>
     </FormField2>
@@ -247,6 +238,13 @@ const DifficultyPicker: FC<{
 export interface OperationEditorProps {
   form: UseFormReturn<CopilotDocV1.Operation>
   toolbar: ReactNode
+  /** 作业类型（创建后不可更改） */
+  type: CopilotType
+  /** 编辑已有作业时为 true，锁定类型切换 */
+  typeLocked?: boolean
+  videoUrl: string
+  onChangeType: (type: CopilotType) => void
+  onChangeVideoUrl: (value: string) => void
 }
 
 export const OperationEditor: FC<OperationEditorProps> = ({
@@ -258,8 +256,14 @@ export const OperationEditor: FC<OperationEditorProps> = ({
     formState: { errors },
   },
   toolbar,
+  type,
+  typeLocked,
+  videoUrl,
+  onChangeType,
+  onChangeVideoUrl,
 }) => {
-  const levels = useLevels().data?.data || []
+  const t = useTranslation()
+  const { data: levels } = useLevels()
 
   const stageName = watch('stageName')
 
@@ -271,56 +275,59 @@ export const OperationEditor: FC<OperationEditorProps> = ({
       const level = findLevelByStageName(levels, stageName)
 
       if (level) {
-        setValue(
-          'doc.title',
-          [level.catTwo, level.catThree, level.name]
-            .filter(Boolean)
-            .join(' - '),
-        )
+        setValue('doc.title', [level.catTwo, level.catThree, level.name].filter(Boolean).join(' - '))
       }
     }
-  }, [stageName, levels])
+  }, [stageName, levels, getValues, setValue])
 
   const globalError = (errors as FieldErrors<{ global: void }>).global?.message
 
   return (
     <FloatingMapContext>
-      <section className="flex flex-col relative h-full pt-4">
-        <div className="px-8 text-lg font-medium flex items-center w-full h-12">
+      <section className="flex flex-col relative h-full pt-4 pb-16">
+        <div className="px-8 text-lg font-medium flex items-center flex-wrap w-full">
           <Icon icon="document" />
-          <span className="ml-2 mr-4">作业编辑器</span>
+          <span className="ml-2 mr-4">{t.components.editor.OperationEditor.job_editor}</span>
           <div className="flex-1" />
 
           {toolbar}
         </div>
 
         {globalError && (
-          <Callout className="mt-4" intent="danger" icon="error" title="错误">
+          <Callout className="mt-4" intent="danger" icon="error" title={t.components.editor.OperationEditor.error}>
             {globalError.split('\n').map((line) => (
               <p key={line}>{line}</p>
             ))}
           </Callout>
         )}
 
-        <div className="py-4 px-8 mr-0.5">
-          <H4>作业元信息</H4>
+        <div className="px-8 mr-0.5">
+          <H4>{t.components.editor.OperationEditor.job_metadata}</H4>
+          <CopilotTypePicker type={type} locked={typeLocked} onChange={onChangeType} />
+          {type === CopilotType.VIDEO && (
+            <div className="mb-4">
+              <VideoUrlField value={videoUrl} onChange={onChangeVideoUrl} />
+            </div>
+          )}
           <div className="flex flex-col md:flex-row">
             <div className="w-full md:w-1/4 md:mr-8">
               <StageNameInput control={control} />
             </div>
             <div className="w-full md:w-3/4">
               <FormField
-                label="作业标题"
+                label={t.components.editor.OperationEditor.job_title}
                 field="doc.title"
                 control={control}
                 error={errors.doc?.title}
                 ControllerProps={{
-                  rules: { required: '必须填写标题' },
+                  rules: {
+                    required: t.components.editor.OperationEditor.title_required,
+                  },
                   render: ({ field }) => (
                     <InputGroup
                       large
                       id="doc.title"
-                      placeholder="起一个引人注目的标题吧"
+                      placeholder={t.components.editor.OperationEditor.title_placeholder}
                       {...field}
                       value={field.value || ''}
                     />
@@ -336,7 +343,7 @@ export const OperationEditor: FC<OperationEditorProps> = ({
             </div>
             <div className="w-full md:w-3/4">
               <FormField
-                label="作业描述"
+                label={t.components.editor.OperationEditor.job_description}
                 field="doc.details"
                 control={control}
                 error={errors.doc?.details}
@@ -345,10 +352,10 @@ export const OperationEditor: FC<OperationEditorProps> = ({
                     <TextArea
                       fill
                       rows={4}
-                      growVertically
+                      autoResize
                       large
                       id="doc.details"
-                      placeholder="如：作者名、参考的视频攻略链接（如有）等"
+                      placeholder={t.components.editor.OperationEditor.description_placeholder}
                       {...field}
                       value={field.value || ''}
                     />
@@ -362,15 +369,17 @@ export const OperationEditor: FC<OperationEditorProps> = ({
 
           <div className="flex flex-col min-h-[calc(100vh-6rem)]">
             <div className="w-full flex flex-col pb-8">
-              <EditorPerformerPanel control={control} />
+              <EditorPerformerPanel control={control} getValues={getValues} />
             </div>
-            <div className="w-full pb-8">
-              <H4>动作序列</H4>
-              <HelperText className="mb-4">
-                <span>拖拽以重新排序</span>
-              </HelperText>
-              <EditorActions control={control} />
-            </div>
+            {type === CopilotType.PRTS && (
+              <div className="w-full pb-8">
+                <H4>{t.components.editor.OperationEditor.action_sequence}</H4>
+                <HelperText className="mb-4">
+                  <span>{t.components.editor.OperationEditor.drag_to_reorder}</span>
+                </HelperText>
+                <EditorActions control={control} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -381,6 +390,7 @@ export const OperationEditor: FC<OperationEditorProps> = ({
 }
 
 const EditorPerformerPanel: FC<EditorPerformerProps> = (props) => {
+  const t = useTranslation()
   const [reload, setReload] = useState(false)
 
   // temporary workaround for https://github.com/clauderic/dnd-kit/issues/799
@@ -391,19 +401,19 @@ const EditorPerformerPanel: FC<EditorPerformerProps> = (props) => {
 
   return (
     <>
-      <H4>干员与干员组</H4>
+      <H4>{t.components.editor.OperationEditor.operators_and_groups}</H4>
       <HelperText className="mb-4">
-        <span>拖拽以重新排序或分配干员</span>
+        <span>{t.components.editor.OperationEditor.drag_to_reorder_operators}</span>
         <span>
-          如果拖拽速度过快可能会使动画出现问题，此时请点击
+          {t.components.editor.OperationEditor.drag_too_fast_issue}
           <Button
             minimal
             className="!inline !p-0 !min-h-0 ![font-size:inherit] !leading-none !align-baseline underline"
             onClick={() => setReload(true)}
           >
-            刷新界面
+            {t.components.editor.OperationEditor.refresh_ui}
           </Button>
-          以修复 （不会丢失数据）
+          {t.components.editor.OperationEditor.to_fix_no_data_loss}
         </span>
       </HelperText>
       <EditorPerformer {...props} />

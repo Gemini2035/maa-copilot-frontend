@@ -1,6 +1,14 @@
-# maa-copilot-frontend
+# zoot-plus-frontend
 
-MAA 作业站前端！
+ZOOT Plus 前端！
+
+## 文档
+
+- ~~后端接口文档~~ (暂无，请参考 [zoot-plus-client](https://github.com/ZOOT-Plus/zoot-plus-client-ts) 的 TS 类型，或者从后端 [Actions](https://github.com/ZOOT-Plus/ZootPlusBackend/actions/workflows/openapi.yml) 的 Artifacts 里下载最新的 OpenAPI 文档)
+- 作业格式：[战斗流程协议](https://maa.plus/docs/zh-cn/protocol/copilot-schema.html)
+- i18n：[i18n/README.md](src/i18n/README.md)
+
+更新 zoot-plus-client 时，需要在 [Tags](https://github.com/ZOOT-Plus/zoot-plus-client-ts/tags) 中复制版本号，然后替换掉 `package.json` 中的 `zoot-plus-client` 版本号，再运行 `pnpm install` 安装依赖
 
 ## 开发流程
 
@@ -12,40 +20,34 @@ MAA 作业站前端！
 
 ## 环境变量
 
-环境变量在 `.env` 文件内定义，你也可以创建 `.env.local` 来覆盖 `.env` 的配置
+环境变量定义在 `.env` `.dev.development` 文件内
 
-```ini
-# 使用线上的后端 API，否则使用本地开发服务器
-VITE_USE_PRODUCTION_API=true
-
-# 地图服务器，如果正在对地图进行本地开发请改为例如 http://localhost:3001
-VITE_THERESA_SERVER=https://theresa.wiki
-```
+你可以创建 `.env.development.local` 文件来覆盖环境变量，优先级为 `.env.development.local` > `.env.development` > `.env`
 
 ## 命令
 
 安装依赖
 
 ```bash
-yarn
+pnpm install
 ```
 
 运行开发服务器
 
 ```bash
-yarn dev
+pnpm dev
 ```
 
 本地构建
 
 ```bash
-yarn build
+pnpm build
 ```
 
 Lint fix
 
 ```bash
-yarn lint:fix
+pnpm lint:fix
 ```
 
 ## Join us!

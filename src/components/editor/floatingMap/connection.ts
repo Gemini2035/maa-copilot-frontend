@@ -10,8 +10,8 @@ if (!MAP_SERVER) {
 // in the future we may need some conversion on this
 export const MAP_ORIGIN = MAP_SERVER
 
-export const getMapUrl = (level: Level) =>
-  `${MAP_SERVER}/widget/map/${level.stageId}/scene`
+// 适配 API 格式：服务端路径要求使用 __f__，将 stageId 中的 #f# 进行转换
+export const getMapUrl = (level: Level) => `${MAP_SERVER}/widget/map/${level.stageId.replace('#f#', '__f__')}/scene`
 
 /** Tells that the map is ready. */
 export type MapReadyMessage = Message<'mapReady'>
@@ -30,10 +30,7 @@ export type TileClickMessage = Message<
   }
 >
 
-export type SetMapStateMessage = Message<
-  'setMapState',
-  { activeTiles: { x: number; y: number }[] }
->
+export type SetMapStateMessage = Message<'setMapState', { activeTiles: { x: number; y: number }[] }>
 
 export type ErrorMessage = Message<'error', { reason: string }>
 

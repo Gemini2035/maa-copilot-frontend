@@ -1,15 +1,12 @@
-import { access, writeFile } from 'fs/promises'
-import fetch from 'node-fetch'
-import { getOperatorNames } from './shared'
+import { mkdir } from 'fs/promises'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-async function fileExists(file: string) {
-  try {
-    await access(file)
-    return true
-  } catch (e) {
-    return false
-  }
-}
+import sharp from 'sharp'
+
+import { fileExists, getOperators } from './shared'
+
+const avatarsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public/assets/operator-avatars')
 
 async function getAllAvatarsFromPrtsWiki() {
   console.info('fetching all avatars from prts wiki...')
@@ -20,9 +17,7 @@ async function getAllAvatarsFromPrtsWiki() {
   let continueParams = new URLSearchParams()
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const resp = (await (
-      await fetch(`${baseUrl}&${continueParams.toString()}`)
-    ).json()) as any
+    const resp = (await (await fetch(`${baseUrl}&${continueParams.toString()}`)).json()) as any
     results.push(...resp.query.allimages)
 
     if (resp.continue) {
@@ -31,13 +26,7 @@ async function getAllAvatarsFromPrtsWiki() {
       break
     }
 
-    console.info(
-      `fetched ${
-        results.length
-      } avatars. fetching next page from ${continueParams.get(
-        'aicontinue',
-      )}...`,
-    )
+    console.info(`fetched ${results.length} avatars. fetching next page from ${continueParams.get('aicontinue')}...`)
   }
 
   console.info(`fetched ${results.length} avatars.`)
@@ -48,47 +37,94 @@ async function getAllAvatarsFromPrtsWiki() {
 async function main() {
   console.info('update-operator-avatars: launched')
 
-  const [operators, files] = await Promise.all([
-    getOperatorNames(),
-    getAllAvatarsFromPrtsWiki(),
-  ])
+  const [{ operators }, files] = await Promise.all([getOperators(), getAllAvatarsFromPrtsWiki()])
 
   console.info('all metadata fetched.')
 
+  const failedAvatars: string[] = []
+
   for (const { id, name } of operators) {
     const withTokenName = id.startsWith('token_') ? `召唤物_${name}` : name
-    const avatarUrl = files.find(
-      (el) => el.name === `头像_${withTokenName}.png`,
-    )?.url
+    const avatarUrl = files.find((el) => el.name === `头像_${withTokenName}.png`)?.url
     if (!avatarUrl) {
-      console.error(`${name}: cannot found avatar file`)
-      continue
-    }
-    const expectFileAt = `public/assets/operator-avatars/${id}.png`
-    if (await fileExists(expectFileAt)) {
-      // console.log(`${name}: already exists`)
-      continue
-    }
-    console.log(`Downloading ${name} from ${avatarUrl}...`)
-    const resp = await fetch(avatarUrl)
-    if (!resp.ok) {
-      console.error(`${name} failed to download`)
+      console.error(`${id}: cannot found avatar file`)
+      failedAvatars.push(`${id}: avatar file not found`)
       continue
     }
 
-    const buffer = await resp.arrayBuffer()
-    await writeFile(expectFileAt, Buffer.from(buffer))
-    console.info(`${name}: downloaded`)
+    let downloadPromise: Promise<ArrayBuffer> | undefined
+
+    const download = () => {
+      if (!downloadPromise) {
+        console.log(`${id}: downloading from ${avatarUrl}`)
+        downloadPromise = fetch(avatarUrl).then((resp) => {
+          if (!resp.ok) {
+            throw new Error(`${id}: failed to download avatar`)
+          }
+          return resp.arrayBuffer()
+        })
+      }
+      return downloadPromise
+    }
+
+    const generateImage = async ({
+      format,
+      size,
+      options,
+    }: {
+      size: number
+      format: Parameters<sharp.Sharp['toFormat']>[0]
+      options: Parameters<sharp.Sharp['toFormat']>[1]
+    }) => {
+      try {
+        const outputDir = path.join(avatarsDir, `${format}${size}`)
+        const outputPath = path.join(outputDir, `${id}.${format}`)
+
+        if (await fileExists(outputPath)) {
+          return
+        }
+
+        if (!(await fileExists(outputDir))) {
+          await mkdir(outputDir, { recursive: true })
+        }
+
+        const buffer = await download()
+
+        await sharp(buffer).resize(size, size).toFormat(format, options).toFile(outputPath)
+
+        return
+      } catch (e) {
+        console.error(`${id}: failed to generate ${format} of size ${size}`, e)
+        failedAvatars.push(`${id}: failed to generate avatar`)
+        return
+      }
+    }
+
+    await Promise.all([
+      generateImage({
+        format: 'webp',
+        size: 32,
+        options: { preset: 'icon', quality: 50 },
+      }),
+      generateImage({
+        format: 'webp',
+        size: 96,
+        options: { preset: 'icon', quality: 80 },
+      }),
+    ])
+  }
+
+  if (failedAvatars.length > 0) {
+    throw new Error(`Failed to update ${failedAvatars.length} avatar image(s):\n${failedAvatars.join('\n')}`)
   }
 }
 
 main()
   .then(() => {
     console.log('Done')
+    process.exit(0)
   })
   .catch((e) => {
     console.error(e)
-  })
-  .finally(() => {
-    process.exit(0)
+    process.exit(1)
   })

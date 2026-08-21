@@ -1,8 +1,8 @@
-import { NonIdealState } from '@blueprintjs/core'
+import { Callout, Icon, NonIdealState } from '@blueprintjs/core'
 import {
   Active,
   DndContext,
-  DragEndEvent,
+  DragOverEvent,
   DragOverlay,
   DragStartEvent,
   Over,
@@ -11,44 +11,145 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
-import {
-  SortableContext,
-  arrayMove,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 
 import { uniqueId } from 'lodash-es'
-import { FC, useEffect, useState } from 'react'
-import { Control, UseFieldArrayMove, useFieldArray } from 'react-hook-form'
-import { SetRequired } from 'type-fest'
+import { FC, useEffect, useMemo, useState } from 'react'
+import { Control, UseFormGetValues, useFieldArray, useWatch } from 'react-hook-form'
 
-import type { CopilotDocV1 } from 'models/copilot.schema'
+import { CopilotDocV1 } from 'models/copilot.schema'
 
+import { useTranslation } from '../../../i18n/i18n'
 import { FactItem } from '../../FactItem'
-import { Droppable, Sortable } from '../../dnd'
+import { Droppable, Sortable, useStableArray } from '../../dnd'
 import { EditorGroupItem } from './EditorGroupItem'
 import { EditorOperatorItem } from './EditorOperatorItem'
-import {
-  EditorPerformerAdd,
-  EditorPerformerAddProps,
-  PerformerType,
-} from './EditorPerformerAdd'
+import { EditorPerformerAdd, EditorPerformerAddProps, PerformerType } from './EditorPerformerAdd'
+import { EditorSheetTrigger } from './EditorSheet'
 
 export interface EditorPerformerProps {
   control: Control<CopilotDocV1.Operation>
+  getValues: UseFormGetValues<CopilotDocV1.Operation>
 }
 
 type Operator = CopilotDocV1.Operator
 type Group = CopilotDocV1.Group
 
+type OperatorLocation =
+  | {
+      container: 'opers'
+      index: number
+      operator: Operator
+    }
+  | {
+      container: 'group'
+      groupIndex: number
+      operatorIndex: number
+      operator: Operator
+      group: Group
+    }
+
 const nonGroupedContainerId = 'nonGrouped'
 
 const getId = (performer: Operator | Group) => {
   // normally the id will never be undefined, but we need to make TS happy as well as handing edge cases
-  return (performer._id ??= uniqueId())
+  return (performer._id ||= uniqueId())
 }
 
-export const EditorPerformer: FC<EditorPerformerProps> = ({ control }) => {
+const normalizeOperators = (opers?: Operator[]): Operator[] =>
+  (opers || [])
+    .filter((operator): operator is Operator => !!operator)
+    .map((operator) => ({
+      ...operator,
+      _id: operator._id || uniqueId(),
+    }))
+
+const findOperatorLocationIn = (
+  operators: Operator[],
+  groups: Group[],
+  id?: UniqueIdentifier,
+): OperatorLocation | undefined => {
+  if (id === undefined) return undefined
+
+  const operatorIndex = operators.findIndex((operator) => operator?._id === id)
+  if (operatorIndex !== -1) {
+    return {
+      container: 'opers',
+      index: operatorIndex,
+      operator: operators[operatorIndex],
+    }
+  }
+
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+    const group = groups[groupIndex]
+    if (!group) continue
+    const operatorIndex = group.opers?.findIndex((operator) => !!operator && operator._id === id) ?? -1
+    if (operatorIndex !== -1 && group.opers?.[operatorIndex]) {
+      return {
+        container: 'group',
+        groupIndex,
+        operatorIndex,
+        operator: group.opers[operatorIndex],
+        group,
+      }
+    }
+  }
+
+  return undefined
+}
+
+const findGroupByIdIn = (groups: Group[], id?: UniqueIdentifier) => groups.find((group) => !!group && group._id === id)
+
+interface AdditionalOperatorsFromActionsProps {
+  control: Control<CopilotDocV1.Operation>
+  operators: Operator[]
+  groups: Group[]
+}
+
+/**
+ * Isolated so that editing any action only re-renders this callout instead of the whole performer panel.
+ */
+const AdditionalOperatorsFromActions: FC<AdditionalOperatorsFromActionsProps> = ({ control, operators, groups }) => {
+  const t = useTranslation()
+  const actions = useWatch({ control, name: 'actions' })
+
+  const additionalOperatorsFromActions = useMemo(() => {
+    if (!actions) return []
+
+    const knownOperatorNames = new Set<string>()
+    for (const operator of operators) {
+      knownOperatorNames.add(operator.name)
+    }
+    for (const group of groups) {
+      for (const operator of group.opers || []) {
+        if (operator) knownOperatorNames.add(operator.name)
+      }
+    }
+
+    const additionalOperators = new Set<string>()
+    for (const action of actions) {
+      if (action && 'name' in action && action.name && !knownOperatorNames.has(action.name)) {
+        additionalOperators.add(action.name)
+      }
+    }
+    return [...additionalOperators]
+  }, [actions, operators, groups])
+
+  if (additionalOperatorsFromActions.length === 0) {
+    return null
+  }
+
+  return (
+    <Callout className="flex items-center py-2 mb-2" icon={null} intent="primary">
+      <Icon icon="info-sign" className="mr-1" />
+      {t.components.editor.operator.EditorPerformer.ungrouped_operators}: {additionalOperatorsFromActions.join(', ')}
+    </Callout>
+  )
+}
+
+export const EditorPerformer: FC<EditorPerformerProps> = ({ control, getValues }) => {
+  const t = useTranslation()
+
   const [editMode, setEditMode] = useState<PerformerType>('operator')
   const sensors = useSensors(useSensor(PointerSensor))
 
@@ -74,19 +175,20 @@ export const EditorPerformer: FC<EditorPerformerProps> = ({ control }) => {
     control,
   })
 
-  // upcast them to the base types to stop TS from complaining when calling indexOf(), includes(), etc.
-  const operators: Operator[] = _operators
-  const groups: Group[] = _groups
+  // useFieldArray returns fresh wrapper objects on every render. Keep stable snapshots
+  // so memoized children and sortable item arrays are not invalidated by unrelated re-renders.
+  const operators: Operator[] = useStableArray(_operators)
+  const groups: Group[] = useStableArray(_groups)
+  const operatorIds = useStableArray(operators.map(getId))
+  const groupIds = useStableArray(groups.map(getId))
 
   const [draggingOperator, setDraggingOperator] = useState<Operator>()
   const [draggingGroup, setDraggingGroup] = useState<Group>()
   const [editingOperator, setEditingOperator] = useState<Operator>()
   const [editingGroup, setEditingGroup] = useState<Group>()
 
-  const isOperatorEditing = (operator: Operator) =>
-    !!editingOperator && getId(editingOperator) === getId(operator)
-  const isGroupEditing = (group: Group) =>
-    !!editingGroup && getId(editingGroup) === getId(group)
+  const isOperatorEditing = (operator: Operator) => !!editingOperator && getId(editingOperator) === getId(operator)
+  const isGroupEditing = (group: Group) => !!editingGroup && getId(editingGroup) === getId(group)
 
   useEffect(() => {
     if (editingOperator) {
@@ -110,106 +212,173 @@ export const EditorPerformer: FC<EditorPerformerProps> = ({ control }) => {
     }
   }, [editMode])
 
-  const findOperatorById = (id?: UniqueIdentifier) =>
-    // find operator from operators
-    operators.find((op) => getId(op) === id) ||
-    // find operator from inside groups
-    groups
-      .map(({ opers }) => opers)
-      .flat()
-      .find((op) => op && getId(op) === id)
+  const findGroupById = (id?: UniqueIdentifier) => groups.find((group) => getId(group) === id)
 
-  const findGroupById = (id?: UniqueIdentifier) =>
-    groups.find((group) => getId(group) === id)
+  const getType = (item: Active | Over) => item.data.current?.type as 'operator' | 'group' | undefined
 
-  const findGroupByOperator = (operator?: Operator) =>
-    operator &&
-    (groups.find((group) => group.opers?.includes(operator)) as
-      | SetRequired<Group, 'opers'>
-      | undefined)
+  const removeOperatorFromLocation = (
+    location: OperatorLocation,
+    currentOperators: Operator[] = operators,
+    currentGroups: Group[] = groups,
+  ) => {
+    if (location.container === 'opers') {
+      const index = currentOperators.findIndex((operator) => operator?._id === getId(location.operator))
+      if (index !== -1) {
+        removeOperator(index)
+      }
+      return
+    }
 
-  const getType = (item: Active | Over) =>
-    item.data.current?.type as 'operator' | 'group'
-
-  const handleDragStart = ({ active }: DragStartEvent) => {
-    if (getType(active) === 'operator') {
-      setDraggingOperator(findOperatorById(active.id))
-    } else {
-      setDraggingGroup(findGroupById(active.id))
+    const group = currentGroups[location.groupIndex]
+    if (group) {
+      updateGroup(location.groupIndex, {
+        ...group,
+        opers: group.opers?.filter((_, index) => index !== location.operatorIndex),
+      })
     }
   }
 
-  const handleDragOver = ({ active, over }: DragEndEvent) => {
+  const addOperatorToGroup = (groupIndex: number, operator: Operator, currentGroups: Group[] = groups) => {
+    const group = currentGroups[groupIndex]
+    if (!group) return
+
+    updateGroup(groupIndex, {
+      ...group,
+      opers: [...normalizeOperators(group.opers), operator],
+    })
+  }
+
+  const moveOperatorToTop = (
+    location: OperatorLocation,
+    currentOperators: Operator[] = operators,
+    currentGroups: Group[] = groups,
+  ) => {
+    if (location.container !== 'group') return
+
+    const group = currentGroups[location.groupIndex]
+    updateGroup(location.groupIndex, {
+      ...group,
+      opers: group.opers?.filter((_, index) => index !== location.operatorIndex),
+    })
+
+    const alreadyAtTop = currentOperators.some((operator) => operator?._id === getId(location.operator))
+    if (!alreadyAtTop) {
+      appendOperator(location.operator)
+    }
+  }
+
+  const moveOperatorToGroup = (
+    location: OperatorLocation,
+    targetGroupIndex: number,
+    currentOperators: Operator[] = operators,
+    currentGroups: Group[] = groups,
+  ) => {
+    if (location.container === 'group' && location.groupIndex === targetGroupIndex) {
+      return
+    }
+
+    const targetGroup = currentGroups[targetGroupIndex]
+    if (!targetGroup) return
+
+    removeOperatorFromLocation(location, currentOperators, currentGroups)
+
+    const alreadyInTargetGroup = targetGroup.opers?.some(
+      (operator) => !!operator && operator._id === getId(location.operator),
+    )
+    if (!alreadyInTargetGroup) {
+      updateGroup(targetGroupIndex, {
+        ...targetGroup,
+        opers: [location.operator, ...normalizeOperators(targetGroup.opers)],
+      })
+    }
+  }
+
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    const currentOperators = getValues('opers') || []
+    const currentGroups = getValues('groups') || []
+    if (getType(active) === 'operator') {
+      setDraggingOperator(findOperatorLocationIn(currentOperators, currentGroups, active.id)?.operator)
+    } else {
+      setDraggingGroup(findGroupByIdIn(currentGroups, active.id))
+    }
+  }
+
+  const handleDragOver = ({ active, over }: DragOverEvent) => {
     if (!over || active.id === over.id) {
       return
     }
 
-    // move operator between groups, or make it non-grouped
-    if (getType(active) === 'operator') {
-      const operator = findOperatorById(active.id)
+    // Always re-read the current RHF values here. dnd-kit may fire many drag-over
+    // events before React commits the previous field-array update.
+    const currentOperators = getValues('opers') || []
+    const currentGroups = getValues('groups') || []
 
-      if (operator) {
-        const oldGroup = findGroupByOperator(operator)
-        const newGroup =
-          getType(over) === 'group'
-            ? findGroupById(over.id)
-            : findGroupByOperator(findOperatorById(over.id))
+    const activeType = getType(active)
+    const overType = getType(over)
 
-        if (oldGroup !== newGroup) {
-          if (oldGroup) {
-            updateGroup(groups.indexOf(oldGroup), {
-              ...oldGroup,
-              opers: oldGroup.opers?.filter((op) => op !== operator),
-            })
-          } else {
-            removeOperator(operators.indexOf(operator))
-          }
-
-          if (newGroup) {
-            updateGroup(groups.indexOf(newGroup), {
-              ...newGroup,
-              opers: [operator, ...(newGroup.opers || [])],
-            })
-          } else {
-            appendOperator(operator)
-          }
-
-          return
+    if (activeType === 'group') {
+      if (overType === 'group') {
+        const oldIndex = currentGroups.findIndex((group) => group?._id === active.id)
+        const newIndex = currentGroups.findIndex((group) => group?._id === over.id)
+        if (oldIndex !== -1 && newIndex !== -1) {
+          moveGroup(oldIndex, newIndex)
         }
       }
+      return
     }
 
-    // move operator or group within their own container
-    if (getType(active) === getType(over)) {
-      const moveItem = <T extends Group | Operator>(
-        items: T[],
-        move: UseFieldArrayMove,
-      ) => {
-        const oldIndex = items.findIndex((item) => getId(item) === active.id)
-        const newIndex = items.findIndex((item) => getId(item) === over.id)
-        if (oldIndex !== -1 && newIndex !== -1) move(oldIndex, newIndex)
+    if (activeType !== 'operator') {
+      return
+    }
+
+    const location = findOperatorLocationIn(currentOperators, currentGroups, active.id)
+    if (!location) return
+
+    if (overType === 'group') {
+      const targetGroupIndex = currentGroups.findIndex((group) => group?._id === over.id)
+      if (targetGroupIndex !== -1) {
+        moveOperatorToGroup(location, targetGroupIndex, currentOperators, currentGroups)
       }
+      return
+    }
 
-      if (getType(active) === 'operator') {
-        const operator = findOperatorById(active.id)
+    if (overType === 'operator') {
+      const overLocation = findOperatorLocationIn(currentOperators, currentGroups, over.id)
+      if (!overLocation) return
 
-        if (operator) {
-          const group = findGroupByOperator(operator)
-
-          if (group) {
-            moveItem(group.opers, (oldIndex, newIndex) => {
-              updateGroup(groups.indexOf(group), {
-                ...group,
-                opers: arrayMove(group.opers, oldIndex, newIndex),
-              })
-            })
-          } else {
-            moveItem(operators, moveOperator)
-          }
+      if (location.container === 'opers' && overLocation.container === 'opers') {
+        if (location.index !== overLocation.index) {
+          moveOperator(location.index, overLocation.index)
         }
-      } else if (getType(active) === 'group') {
-        moveItem(groups, moveGroup)
+        return
       }
+
+      if (location.container === 'group' && overLocation.container === 'group') {
+        if (location.groupIndex === overLocation.groupIndex) {
+          if (location.operatorIndex !== overLocation.operatorIndex) {
+            const group = currentGroups[location.groupIndex]
+            updateGroup(location.groupIndex, {
+              ...group,
+              opers: arrayMove(group.opers || [], location.operatorIndex, overLocation.operatorIndex),
+            })
+          }
+        } else {
+          moveOperatorToGroup(location, overLocation.groupIndex, currentOperators, currentGroups)
+        }
+        return
+      }
+
+      if (location.container === 'group' && overLocation.container === 'opers') {
+        moveOperatorToTop(location, currentOperators, currentGroups)
+      } else if (location.container === 'opers' && overLocation.container === 'group') {
+        moveOperatorToGroup(location, overLocation.groupIndex, currentOperators, currentGroups)
+      }
+      return
+    }
+
+    // Dropping on the non-grouped droppable container.
+    if (over.id === nonGroupedContainerId) {
+      moveOperatorToTop(location, currentOperators, currentGroups)
     }
   }
 
@@ -218,118 +387,155 @@ export const EditorPerformer: FC<EditorPerformerProps> = ({ control }) => {
     setDraggingGroup(undefined)
   }
 
+  const isOperatorNameTaken = (
+    name: string,
+    excludedId?: string,
+    currentOperators: Operator[] = operators,
+    currentGroups: Group[] = groups,
+  ) =>
+    currentOperators.some((operator) => operator?.name === name && getId(operator) !== excludedId) ||
+    currentGroups.some((group) =>
+      group?.opers?.some((operator) => operator?.name === name && getId(operator) !== excludedId),
+    )
+
+  const isGroupNameTaken = (name: string, excludedId?: string, currentGroups: Group[] = groups) =>
+    currentGroups.some((group) => group?.name === name && getId(group) !== excludedId)
+
   const submitOperator: EditorPerformerAddProps['submitOperator'] = (
     { groupName, ...operator },
     setError,
+    fromSheet,
   ) => {
-    if (
-      operators.find(
-        ({ _id, name }) => name === operator.name && _id !== operator._id,
-      )
-    ) {
-      setError('name', { message: '干员已存在' })
+    const currentOperators = getValues('opers') || []
+    const currentGroups = getValues('groups') || []
+    const submittedId = operator._id ? getId(operator) : undefined
+
+    if (isOperatorNameTaken(operator.name, submittedId, currentOperators, currentGroups)) {
+      setError?.('name', {
+        message: t.components.editor.operator.EditorPerformer.operator_already_exists,
+      })
       return false
     }
 
-    let newGroup: Group | undefined
-    let newGroupIndex = -1
+    const existingId = fromSheet && submittedId ? submittedId : editingOperator ? getId(editingOperator) : undefined
+    const targetGroupIndex = groupName ? currentGroups.findIndex((group) => group?.name === groupName) : -1
 
-    if (groupName) {
-      newGroupIndex = groups.findIndex((group) => group.name === groupName)
-      newGroup = groups[newGroupIndex]
-
-      if (!newGroup) {
-        newGroup = { name: groupName }
-        newGroupIndex = groups.length
-        submitGroup(newGroup, setError)
-      }
-    }
-
-    const addOperator = () => {
-      if (newGroup) {
-        updateGroup(newGroupIndex, {
-          ...newGroup,
-          opers: [...(newGroup.opers || []), operator],
+    if (existingId) {
+      const location = findOperatorLocationIn(currentOperators, currentGroups, existingId)
+      if (!location) {
+        setError?.('global' as any, {
+          message: t.components.editor.operator.EditorPerformer.update_operator_not_found,
         })
+        return false
+      }
+
+      operator._id = existingId
+
+      if (groupName && targetGroupIndex === -1) {
+        // Move to a group that is created together with this submission.
+        removeOperatorFromLocation(location, currentOperators, currentGroups)
+        appendGroup({
+          _id: uniqueId(),
+          name: groupName,
+          opers: [operator],
+        })
+      } else if (targetGroupIndex !== -1) {
+        if (location.container === 'group' && location.groupIndex === targetGroupIndex) {
+          const group = currentGroups[targetGroupIndex]
+          updateGroup(targetGroupIndex, {
+            ...group,
+            opers: group.opers?.map((groupOperator, index) =>
+              index === location.operatorIndex ? operator : groupOperator,
+            ),
+          })
+        } else {
+          removeOperatorFromLocation(location, currentOperators, currentGroups)
+          addOperatorToGroup(targetGroupIndex, operator, currentGroups)
+        }
+      } else if (location.container === 'group') {
+        removeOperatorFromLocation(location, currentOperators, currentGroups)
+        const topLevelIndex = currentOperators.findIndex((topLevelOperator) => topLevelOperator?._id === existingId)
+        if (topLevelIndex !== -1) {
+          updateOperator(topLevelIndex, operator)
+        } else {
+          appendOperator(operator)
+        }
+      } else {
+        updateOperator(location.index, operator)
+      }
+
+      setEditingOperator(undefined)
+    } else {
+      operator._id = uniqueId()
+
+      if (groupName && targetGroupIndex === -1) {
+        appendGroup({
+          _id: uniqueId(),
+          name: groupName,
+          opers: [operator],
+        })
+      } else if (targetGroupIndex !== -1) {
+        addOperatorToGroup(targetGroupIndex, operator, currentGroups)
       } else {
         appendOperator(operator)
       }
     }
 
-    if (editingOperator) {
-      const existingOperator = findOperatorById(getId(editingOperator))
-
-      if (existingOperator) {
-        operator._id = getId(editingOperator)
-
-        const oldGroup = findGroupByOperator(existingOperator)
-
-        if (oldGroup) {
-          if (oldGroup === newGroup) {
-            // replace existing operator in group
-            updateGroup(groups.indexOf(oldGroup), {
-              ...oldGroup,
-              opers: oldGroup.opers.map((op) =>
-                op === existingOperator ? operator : op,
-              ),
-            })
-          } else {
-            // remove existing operator from group
-            updateGroup(groups.indexOf(oldGroup), {
-              ...oldGroup,
-              opers: oldGroup.opers.filter((op) => op !== existingOperator),
-            })
-
-            // add new operator to group
-            addOperator()
-          }
-        } else {
-          if (newGroup) {
-            removeOperator(operators.indexOf(existingOperator))
-            addOperator()
-          } else {
-            updateOperator(operators.indexOf(existingOperator), operator)
-          }
-        }
-
-        setEditingOperator(undefined)
-      } else {
-        setError('global' as any, { message: '未能找到要更新的干员' })
-        return false
-      }
-    } else {
-      operator._id = uniqueId()
-      addOperator()
-    }
-
     return true
   }
 
-  const submitGroup: EditorPerformerAddProps['submitGroup'] = (
-    group,
-    setError,
-  ) => {
-    if (
-      groups.find(({ _id, name }) => name === group.name && _id !== group._id)
-    ) {
-      setError('name', { message: '干员组已存在' })
+  const submitGroup: EditorPerformerAddProps['submitGroup'] = (group, setError, fromSheet) => {
+    const currentGroups = getValues('groups') || []
+    const submittedId = group._id ? getId(group) : undefined
+
+    if (isGroupNameTaken(group.name, submittedId, currentGroups)) {
+      setError?.('name', {
+        message: t.components.editor.operator.EditorPerformer.group_already_exists,
+      })
       return false
     }
 
-    if (editingGroup) {
-      const existingGroup = findGroupById(getId(editingGroup))
-
+    if (editingGroup || (fromSheet && group._id)) {
+      const existingGroup = fromSheet ? group : findGroupById(getId(editingGroup!))
       if (existingGroup) {
-        group._id = getId(editingGroup)
-        updateGroup(groups.indexOf(existingGroup), group)
+        const groupIndex = currentGroups.findIndex((item) => item?._id === getId(existingGroup))
+        if (groupIndex === -1) {
+          setError?.('global' as any, {
+            message: t.components.editor.operator.EditorPerformer.update_group_not_found,
+          })
+          return false
+        }
+
+        updateGroup(groupIndex, {
+          ...group,
+          _id: getId(existingGroup),
+          opers: normalizeOperators(group.opers),
+        })
         setEditingGroup(undefined)
       } else {
-        setError('global' as any, { message: '未能找到要更新的干员组' })
+        setError?.('global' as any, {
+          message: t.components.editor.operator.EditorPerformer.update_group_not_found,
+        })
         return false
       }
     } else {
-      group._id = uniqueId()
-      appendGroup(group)
+      const currentOperators = getValues('opers') || []
+      const opers = normalizeOperators(group.opers)
+      appendGroup({
+        ...group,
+        _id: uniqueId(),
+        opers,
+      })
+
+      if (opers.length) {
+        const operatorIds = new Set(opers.map(getId))
+        const topLevelIndices = currentOperators.flatMap((operator, index) =>
+          operator && operatorIds.has(getId(operator)) ? [index] : [],
+        )
+        if (topLevelIndices.length) {
+          removeOperator(topLevelIndices)
+        }
+      }
     }
 
     return true
@@ -339,6 +545,16 @@ export const EditorPerformer: FC<EditorPerformerProps> = ({ control }) => {
     <>
       <div className="flex flex-wrap md:flex-nowrap">
         <div className="w-full md:w-1/3 md:mr-8 flex flex-col pb-8">
+          <div className="mb-2">
+            <EditorSheetTrigger
+              submitOperator={submitOperator}
+              submitGroup={submitGroup}
+              existedOperators={operators}
+              existedGroups={groups}
+              removeOperator={removeOperator}
+              removeGroup={removeGroup}
+            />
+          </div>
           <EditorPerformerAdd
             mode={editMode}
             operator={editingOperator}
@@ -354,7 +570,8 @@ export const EditorPerformer: FC<EditorPerformerProps> = ({ control }) => {
           />
         </div>
         <div className="w-full md:w-2/3 pb-8">
-          <div className="p-2 -mx-2 relative">
+          <AdditionalOperatorsFromActions control={control} operators={operators} groups={groups} />
+          <div className="mt-2 relative">
             <DndContext
               sensors={sensors}
               onDragStart={handleDragStart}
@@ -363,47 +580,48 @@ export const EditorPerformer: FC<EditorPerformerProps> = ({ control }) => {
               onDragCancel={handleDragEnd}
             >
               <Droppable id={nonGroupedContainerId}>
-                <FactItem title="干员" icon="person" className="font-bold" />
+                <FactItem
+                  title={t.components.editor.operator.EditorPerformer.operators}
+                  icon="person"
+                  className="font-bold"
+                />
 
-                {operators.length === 0 && <NonIdealState title="暂无干员" />}
+                {operators.length === 0 && (
+                  <NonIdealState title={t.components.editor.operator.EditorPerformer.no_operators} />
+                )}
 
-                <SortableContext
-                  items={operators.map(getId)}
-                  strategy={verticalListSortingStrategy}
-                >
+                <SortableContext items={operatorIds} strategy={verticalListSortingStrategy}>
                   <ul className="flex flex-wrap">
                     {operators.map((operator) => (
-                      <li className="mt-2 mr-2" key={getId(operator)}>
-                        <Sortable
-                          id={getId(operator)}
-                          data={{ type: 'operator' }}
-                        >
-                          {(attrs) => (
-                            <EditorOperatorItem
-                              operator={operator}
-                              editing={isOperatorEditing(operator)}
-                              onEdit={() =>
-                                setEditingOperator(
-                                  isOperatorEditing(operator)
-                                    ? undefined
-                                    : operator,
-                                )
+                      <Sortable
+                        className="mt-2 mr-2"
+                        key={getId(operator)}
+                        id={getId(operator)}
+                        data={{ type: 'operator' }}
+                      >
+                        {(attrs) => (
+                          <EditorOperatorItem
+                            operator={operator}
+                            editing={isOperatorEditing(operator)}
+                            onEdit={() => setEditingOperator(isOperatorEditing(operator) ? undefined : operator)}
+                            onRemove={() => {
+                              const currentOperators = getValues('opers') || []
+                              const currentIndex = currentOperators.findIndex((item) => item?._id === getId(operator))
+                              if (currentIndex !== -1) {
+                                removeOperator(currentIndex)
                               }
-                              onRemove={() =>
-                                removeOperator(operators.indexOf(operator))
-                              }
-                              {...attrs}
-                            />
-                          )}
-                        </Sortable>
-                      </li>
+                            }}
+                            {...attrs}
+                          />
+                        )}
+                      </Sortable>
                     ))}
                   </ul>
                 </SortableContext>
               </Droppable>
 
               <FactItem
-                title="干员组"
+                title={t.components.editor.operator.EditorPerformer.operator_groups}
                 icon="people"
                 className="font-bold mt-8"
               />
@@ -411,59 +629,58 @@ export const EditorPerformer: FC<EditorPerformerProps> = ({ control }) => {
               {groups.length === 0 && (
                 // extra div container: NonIdealState is using height: 100% which causes unexpected overflow
                 <div className="relative">
-                  <NonIdealState title="暂无干员组" />
+                  <NonIdealState title={t.components.editor.operator.EditorPerformer.no_operator_groups} />
                 </div>
               )}
 
-              <SortableContext
-                items={groups.map(getId)}
-                strategy={verticalListSortingStrategy}
-              >
+              <SortableContext items={groupIds} strategy={verticalListSortingStrategy}>
                 <ul className="flex flex-wrap">
                   {groups.map((group) => (
-                    <li className="mt-4 mr-4" key={getId(group)}>
-                      <Sortable id={getId(group)} data={{ type: 'group' }}>
-                        {(attrs) => (
-                          <EditorGroupItem
-                            group={group}
-                            editing={isGroupEditing(group)}
-                            onEdit={() =>
-                              setEditingGroup(
-                                isGroupEditing(group) ? undefined : group,
-                              )
+                    <Sortable className="mt-4 mr-4" key={getId(group)} id={getId(group)} data={{ type: 'group' }}>
+                      {(attrs) => (
+                        <EditorGroupItem
+                          group={group}
+                          editing={isGroupEditing(group)}
+                          onEdit={() => setEditingGroup(isGroupEditing(group) ? undefined : group)}
+                          onRemove={() => {
+                            const groupIndex = groups.findIndex((item) => getId(item) === getId(group))
+                            if (groupIndex !== -1) {
+                              removeGroup(groupIndex)
                             }
-                            onRemove={() => removeGroup(groups.indexOf(group))}
-                            getOperatorId={getId}
-                            isOperatorEditing={isOperatorEditing}
-                            onOperatorEdit={(operator) =>
-                              setEditingOperator(
-                                isOperatorEditing(operator)
-                                  ? undefined
-                                  : operator,
-                              )
-                            }
-                            onOperatorRemove={(operatorIndexInGroup) => {
-                              const groupIndex = groups.indexOf(group)
-                              if (operatorIndexInGroup > -1) {
-                                group.opers?.splice(operatorIndexInGroup, 1)
-                              }
-                              updateGroup(groupIndex, group)
-                            }}
-                            {...attrs}
-                          />
-                        )}
-                      </Sortable>
-                    </li>
+                          }}
+                          getOperatorId={getId}
+                          isOperatorEditing={isOperatorEditing}
+                          onOperatorEdit={(operator) =>
+                            setEditingOperator(isOperatorEditing(operator) ? undefined : operator)
+                          }
+                          onOperatorRemove={(operatorIndexInGroup, operator) => {
+                            const currentGroups = getValues('groups') || []
+                            const groupIndex = currentGroups.findIndex((item) => item?._id === getId(group))
+                            if (groupIndex === -1) return
+
+                            const currentGroup = currentGroups[groupIndex]
+                            const currentOperatorIndex =
+                              currentGroup?.opers?.findIndex((item) => item?._id === getId(operator)) ?? -1
+                            const removeIndex =
+                              currentOperatorIndex !== -1 ? currentOperatorIndex : operatorIndexInGroup
+                            if (removeIndex < 0) return
+
+                            updateGroup(groupIndex, {
+                              ...currentGroup,
+                              opers: currentGroup.opers?.filter((_, index) => index !== removeIndex),
+                            })
+                          }}
+                          {...attrs}
+                        />
+                      )}
+                    </Sortable>
                   ))}
                 </ul>
               </SortableContext>
 
               <DragOverlay>
                 {draggingOperator && (
-                  <EditorOperatorItem
-                    editing={isOperatorEditing(draggingOperator)}
-                    operator={draggingOperator}
-                  />
+                  <EditorOperatorItem editing={isOperatorEditing(draggingOperator)} operator={draggingOperator} />
                 )}
                 {draggingGroup && (
                   <EditorGroupItem

@@ -1,122 +1,144 @@
 import { IconName } from '@blueprintjs/core'
 
+import { groupBy } from 'lodash-es'
+
+import { i18nDefer } from '../i18n/i18n'
 import { CopilotDocV1 } from './copilot.schema'
 
 interface ActionType {
   type: 'choice'
   icon: IconName
   accent: string
-  title: string
-  value: CopilotDocV1.Type | 'Unknown'
+  accentText: string
+  accentBg: string
+  title: () => string
+  shortTitle: () => string
+  value: CopilotDocV1.Type
   alternativeValue: string
-  description: string
-  group: string
+  description: () => string
+  group: () => string
 }
-
-const accent = {
-  red: 'border-red-700',
-  amber: 'border-amber-700',
-  lime: 'border-lime-700',
-  emerald: 'border-emerald-700',
-  cyan: 'border-cyan-700',
-  blue: 'border-blue-700',
-  violet: 'border-violet-700',
-  fuchsia: 'border-fuchsia-700',
-  zinc: 'border-zinc-700',
-}
-
 export const ACTION_TYPES: ActionType[] = [
   {
     type: 'choice',
     icon: 'new-object',
-    accent: accent.red,
-    title: '部署',
+    accent: 'border-sky-700',
+    accentText: 'text-sky-700 dark:text-sky-400',
+    accentBg: 'bg-sky-700',
+    title: i18nDefer.models.types.action_type.deploy.title,
+    shortTitle: i18nDefer.models.types.action_type.deploy.short_title,
     value: CopilotDocV1.Type.Deploy,
     alternativeValue: '部署',
-    description: `部署干员至指定位置。当费用不够时，会一直等待到费用够（除非 timeout）`,
-    group: '干员上/退场',
+    description: i18nDefer.models.types.action_type.deploy.description,
+    group: i18nDefer.models.types.action_group.operator_deploy_retreat,
   },
   {
     type: 'choice',
     icon: 'graph-remove',
-    accent: accent.amber,
-    title: '撤退',
+    accent: 'border-amber-700',
+    accentText: 'text-amber-700 dark:text-amber-400',
+    accentBg: 'bg-amber-700',
+    title: i18nDefer.models.types.action_type.retreat.title,
+    shortTitle: i18nDefer.models.types.action_type.retreat.short_title,
     value: CopilotDocV1.Type.Retreat,
     alternativeValue: '撤退',
-    description: '将干员从作战中撤出',
-    group: '干员上/退场',
+    description: i18nDefer.models.types.action_type.retreat.description,
+    group: i18nDefer.models.types.action_group.operator_deploy_retreat,
   },
   {
     type: 'choice',
     icon: 'target',
-    accent: accent.lime,
-    title: '使用技能',
+    accent: 'border-lime-700',
+    accentText: 'text-lime-700 dark:text-lime-400',
+    accentBg: 'bg-lime-700',
+    title: i18nDefer.models.types.action_type.skill.title,
+    shortTitle: i18nDefer.models.types.action_type.skill.short_title,
     value: CopilotDocV1.Type.Skill,
     alternativeValue: '技能',
-    description: `当技能 CD 没转好时，一直等待到技能 CD 好（除非 timeout）`,
-    group: '干员技能',
+    description: i18nDefer.models.types.action_type.skill.description,
+    group: i18nDefer.models.types.action_group.operator_skills,
   },
   {
     type: 'choice',
     icon: 'swap-horizontal',
-    accent: accent.emerald,
-    title: '切换技能用法',
+    accent: 'border-emerald-700',
+    accentText: 'text-emerald-700 dark:text-emerald-400',
+    accentBg: 'bg-emerald-700',
+    title: i18nDefer.models.types.action_type.skill_usage.title,
+    shortTitle: i18nDefer.models.types.action_type.skill_usage.short_title,
     value: CopilotDocV1.Type.SkillUsage,
     alternativeValue: '技能用法',
-    description: `切换干员技能用法。例如，刚下桃金娘、需要她帮忙打几个怪，但此时不能自动开技能否则会漏怪，等中后期平稳了才需要她自动开技能，则可以在对应时刻后，将桃金娘的技能用法从「不自动使用」改为「好了就用」。`,
-    group: '干员技能',
+    description: i18nDefer.models.types.action_type.skill_usage.description,
+    group: i18nDefer.models.types.action_group.operator_skills,
   },
   {
     type: 'choice',
     icon: 'fast-forward',
-    accent: accent.cyan,
-    title: '切换二倍速',
+    accent: 'border-pink-700',
+    accentText: 'text-pink-700 dark:text-pink-400',
+    accentBg: 'bg-pink-700',
+    title: i18nDefer.models.types.action_type.speed_up.title,
+    shortTitle: i18nDefer.models.types.action_type.speed_up.short_title,
     value: CopilotDocV1.Type.SpeedUp,
     alternativeValue: '二倍速',
-    description: `执行后切换至二倍速，再次执行切换至一倍速`,
-    group: '作战控制',
+    description: i18nDefer.models.types.action_type.speed_up.description,
+    group: i18nDefer.models.types.action_group.battle_control,
   },
   {
     type: 'choice',
     icon: 'fast-backward',
-    accent: accent.blue,
-    title: '进入子弹时间',
+    accent: 'border-blue-700',
+    accentText: 'text-blue-700 dark:text-blue-400',
+    accentBg: 'bg-blue-700',
+    title: i18nDefer.models.types.action_type.bullet_time.title,
+    shortTitle: i18nDefer.models.types.action_type.bullet_time.short_title,
     value: CopilotDocV1.Type.BulletTime,
     alternativeValue: '子弹时间',
-    description: `执行后将点击任意干员，进入 1/5 速度状态；再进行任意动作会恢复正常速度。下一个任务必须是“部署”、“技能”、“撤退”其中之一，此时会提前点开该干员，等待满足条件后再执行。`,
-    group: '作战控制',
+    description: i18nDefer.models.types.action_type.bullet_time.description,
+    group: i18nDefer.models.types.action_group.battle_control,
   },
   {
     type: 'choice',
     icon: 'camera',
-    accent: accent.blue,
-    title: '移动相机',
+    accent: 'border-blue-700',
+    accentText: 'text-blue-700 dark:text-blue-400',
+    accentBg: 'bg-blue-700',
+    title: i18nDefer.models.types.action_type.move_camera.title,
+    shortTitle: i18nDefer.models.types.action_type.move_camera.short_title,
     value: CopilotDocV1.Type.MoveCamera,
     alternativeValue: '移动相机',
-    description: `仅用于引航者试炼模式中切换区域`,
-    group: '作战控制',
+    description: i18nDefer.models.types.action_type.move_camera.description,
+    group: i18nDefer.models.types.action_group.battle_control,
   },
   {
     type: 'choice',
     icon: 'antenna',
-    accent: accent.violet,
-    title: '开始挂机',
+    accent: 'border-violet-700',
+    accentText: 'text-violet-700 dark:text-violet-400',
+    accentBg: 'bg-violet-700',
+    title: i18nDefer.models.types.action_type.skill_daemon.title,
+    shortTitle: i18nDefer.models.types.action_type.skill_daemon.short_title,
     value: CopilotDocV1.Type.SkillDaemon,
     alternativeValue: '摆完挂机',
-    description: `进入挂机模式。仅使用 “好了就用” 的技能，其他什么都不做，直到战斗结束`,
-    group: '作战控制',
+    description: i18nDefer.models.types.action_type.skill_daemon.description,
+    group: i18nDefer.models.types.action_group.battle_control,
   },
   {
     type: 'choice',
     icon: 'paragraph',
-    accent: accent.fuchsia,
-    title: '打印描述内容',
+    accent: 'border-fuchsia-700',
+    accentText: 'text-fuchsia-700 dark:text-fuchsia-400',
+    accentBg: 'bg-fuchsia-700',
+    title: i18nDefer.models.types.action_type.output.title,
+    shortTitle: i18nDefer.models.types.action_type.output.short_title,
     value: CopilotDocV1.Type.Output,
     alternativeValue: '打印',
-    description: `对作战没有实际作用，仅用于输出描述内容（用来做字幕之类的）`,
-    group: '杂项',
+    description: i18nDefer.models.types.action_type.output.description,
+    group: i18nDefer.models.types.action_group.miscellaneous,
   },
 ]
+
+export const ACTION_TYPES_BY_GROUP = groupBy(ACTION_TYPES, 'group')
 
 export const validTypesFollowingBulletTime = [
   CopilotDocV1.Type.Deploy,
@@ -124,22 +146,67 @@ export const validTypesFollowingBulletTime = [
   CopilotDocV1.Type.Retreat,
 ]
 
-const notFoundActionType: ActionType = {
+const notFoundActionType: Omit<ActionType, 'value'> & { value: 'Unknown' } = {
   type: 'choice',
   icon: 'help',
-  accent: accent.zinc,
-  title: '未知类型',
+  accent: 'border-zinc-700',
+  accentText: 'text-zinc-700 dark:text-zinc-400',
+  accentBg: 'bg-zinc-700',
+  title: i18nDefer.models.types.action_type.unknown.title,
+  shortTitle: i18nDefer.models.types.action_type.unknown.short_title,
   value: 'Unknown',
-  alternativeValue: '未知',
-  description: `未知动作类型`,
-  group: '未知',
+  alternativeValue: '',
+  description: i18nDefer.models.types.action_type.unknown.description,
+  group: i18nDefer.models.types.action_group.unknown,
 }
 
 export const findActionType = (type?: string) => {
   if (!type) return notFoundActionType
-  return (
-    ACTION_TYPES.find(
-      (item) => item.value === type || item.alternativeValue === type,
-    ) || notFoundActionType
-  )
+  return ACTION_TYPES.find((item) => item.value === type || item.alternativeValue === type) || notFoundActionType
+}
+
+export type ActionConditionType =
+  | 'costs'
+  | 'costChanges'
+  | 'kills'
+  | 'cooling'
+  | 'intermediatePreDelay'
+  | 'intermediatePostDelay'
+
+export const ACTION_CONDITIONS: Record<
+  ActionConditionType,
+  { title: () => string; icon: IconName; description: () => string }
+> = {
+  // 注意这里 intermediatePreDelay/intermediatePostDelay 和动作里 preDelay/rearDelay 的含义是反过来的！！！
+  // 主要是便于设计 UI 和易于让用户理解
+  intermediatePreDelay: {
+    title: i18nDefer.models.types.action_condition.intermediate_pre_delay.title,
+    icon: 'time',
+    description: i18nDefer.models.types.action_condition.intermediate_pre_delay.description,
+  },
+  intermediatePostDelay: {
+    title: i18nDefer.models.types.action_condition.intermediate_post_delay.title,
+    icon: 'time',
+    description: i18nDefer.models.types.action_condition.intermediate_post_delay.description,
+  },
+  costs: {
+    title: i18nDefer.models.types.action_condition.costs.title,
+    icon: 'dollar',
+    description: i18nDefer.models.types.action_condition.costs.description,
+  },
+  costChanges: {
+    title: i18nDefer.models.types.action_condition.cost_changes.title,
+    icon: 'dollar',
+    description: i18nDefer.models.types.action_condition.cost_changes.description,
+  },
+  kills: {
+    title: i18nDefer.models.types.action_condition.kills.title,
+    icon: 'locate',
+    description: i18nDefer.models.types.action_condition.kills.description,
+  },
+  cooling: {
+    title: i18nDefer.models.types.action_condition.cooling.title,
+    icon: 'people',
+    description: i18nDefer.models.types.action_condition.cooling.description,
+  },
 }

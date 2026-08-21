@@ -1,41 +1,27 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
-const DEBUG = true as boolean
+const DEBUG = false as boolean
 
 let messengerName = 'Copilot'
 
-export type Message<
-  T extends string = string,
-  D = undefined,
-> = D extends undefined ? BaseMessage<T> : PayloadMessage<T, D>
+export type Message<T extends string = string, D = undefined> = D extends undefined
+  ? BaseMessage<T>
+  : PayloadMessage<T, D>
 
 interface BaseMessage<T extends string = string> {
   readonly id?: number | string
   readonly type: T
 }
 
-export interface PayloadMessage<T extends string = string, D = never>
-  extends BaseMessage<T> {
+export interface PayloadMessage<T extends string = string, D = never> extends BaseMessage<T> {
   readonly data: D
 }
 
 interface Messenger {
-  addEventListener<M extends Message>(
-    type: string,
-    callback: ((ev: MessengerEvent<M>) => void) | null,
-  ): void
-  addEventListener(
-    type: string,
-    callback: EventListenerOrEventListenerObject,
-  ): void
-  removeEventListener<M extends Message>(
-    type: string,
-    callback: ((ev: MessengerEvent<M>) => void) | null,
-  ): void
-  removeEventListener(
-    type: string,
-    callback: EventListenerOrEventListenerObject,
-  ): void
+  addEventListener<M extends Message>(type: string, callback: ((ev: MessengerEvent<M>) => void) | null): void
+  addEventListener(type: string, callback: EventListenerOrEventListenerObject): void
+  removeEventListener<M extends Message>(type: string, callback: ((ev: MessengerEvent<M>) => void) | null): void
+  removeEventListener(type: string, callback: EventListenerOrEventListenerObject): void
 }
 
 class Messenger extends EventTarget {}
@@ -45,9 +31,7 @@ export class MessengerEvent<M extends Message = Message> extends Event {
   readonly origin: MessageEvent['origin']
   readonly message: M
 
-  constructor(
-    params: Pick<MessengerEvent<M>, 'type' | 'source' | 'origin' | 'message'>,
-  ) {
+  constructor(params: Pick<MessengerEvent<M>, 'type' | 'source' | 'origin' | 'message'>) {
     super(params.type)
     this.source = params.source
     this.origin = params.origin
@@ -98,6 +82,8 @@ export function useMessage<M extends Message>(
   type: M['type'],
   listener: (message: MessengerEvent<M>) => void,
 ) {
+  const listenerRef = useRef(listener)
+  listenerRef.current = listener
   useEffect(() => {
     const handler: typeof listener = (message) => {
       if (isAckType(message.type)) {
@@ -113,7 +99,7 @@ export function useMessage<M extends Message>(
 
         // processing messages received from outside can be error-prone, so we wrap the listener in a try-catch
         try {
-          listener(message)
+          listenerRef.current(message)
         } catch (e) {
           log('Error:', e)
         }
@@ -123,7 +109,7 @@ export function useMessage<M extends Message>(
     return () => {
       messenger.removeEventListener(type, handler)
     }
-  }, [type, origin, listener])
+  }, [type, origin])
 }
 
 export function sendMessage<M extends Message>(

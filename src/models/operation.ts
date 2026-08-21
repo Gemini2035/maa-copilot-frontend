@@ -1,37 +1,12 @@
-export interface PaginatedResponse<T> {
-  hasNext: boolean
-  page: number
-  total: number
-  data: T[]
+import { ArkLevelInfo, CopilotInfo } from 'zoot-plus-client'
+
+import { CopilotDocV1 } from 'models/copilot.schema'
+
+export type Operation = CopilotInfo & {
+  parsedContent: CopilotDocV1.Operation
 }
 
-export interface Operation {
-  id: string | number
-  content: string
-  uploadTime: string
-  uploader: string
-  views: number
-  hotScore: number
-  available: boolean
-  ratingLevel: number // integer in [0, 10]
-  ratingRatio: number
-  ratingType: OpRatingType
-  notEnoughRating: boolean
-  like: number
-  dislike: number
-  commentsCount: number
-}
-
-export interface Level {
-  catOne: string
-  catTwo: string
-  catThree: string
-  name: string
-  levelId: string
-  stageId: string
-  width: number
-  height: number
-}
+export type Level = ArkLevelInfo
 
 export enum OpRatingType {
   None = 0,
@@ -51,14 +26,13 @@ export enum OpDifficultyBitFlag {
   HARD = 2,
 }
 
-// exists for historical reasons
-export type OperationListItem = Operation
-
-export interface OperationGroup {
-  name: string
-  operators: string[]
-}
+/** 作业类型：创建后不可更改。PRTS = 动作序列自动化战斗；VIDEO = 玩家分享的攻略视频。 */
+export const CopilotType = {
+  PRTS: 'PRTS',
+  VIDEO: 'VIDEO',
+} as const
+export type CopilotType = (typeof CopilotType)[keyof typeof CopilotType]
 
 export enum MinimumRequired {
-  V4_0_0 = 'v4.0.0',
+  V4_0_0 = 'v6.0.0',
 }

@@ -1,31 +1,26 @@
 import { BrowserRouter } from 'react-router-dom'
 import { SWRConfig } from 'swr'
 
-import { Effects } from 'components/Effects'
-
 import { GlobalErrorBoundary } from './components/GlobalErrorBoundary'
+import { I18NProvider } from './i18n/I18NProvider'
 import { FCC } from './types'
-import { request } from './utils/fetcher'
-import { localStorageProvider, swrCacheMiddleware } from './utils/swr-cache'
 
 export const App: FCC = ({ children }) => {
   return (
-    <>
-      <Effects />
-      <SWRConfig
-        value={{
-          fetcher: request,
-          provider: localStorageProvider,
-          focusThrottleInterval: 1000 * 60,
-          errorRetryInterval: 1000 * 3,
-          errorRetryCount: 3,
-          use: [swrCacheMiddleware],
-        }}
-      >
-        <GlobalErrorBoundary>
+    <SWRConfig
+      value={{
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
+        dedupingInterval: 1000 * 60,
+        errorRetryInterval: 1000 * 3,
+        errorRetryCount: 3,
+      }}
+    >
+      <GlobalErrorBoundary>
+        <I18NProvider>
           <BrowserRouter>{children}</BrowserRouter>
-        </GlobalErrorBoundary>
-      </SWRConfig>
-    </>
+        </I18NProvider>
+      </GlobalErrorBoundary>
+    </SWRConfig>
   )
 }

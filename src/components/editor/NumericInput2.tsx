@@ -1,32 +1,109 @@
-import {
-  HTMLInputProps,
-  NumericInput,
-  NumericInputProps,
-} from '@blueprintjs/core'
+import { HTMLInputProps, NumericInput, NumericInputProps } from '@blueprintjs/core'
 
-type MixedNumericInputProps = HTMLInputProps & NumericInputProps
+import clsx from 'clsx'
+import { clamp, noop } from 'lodash-es'
+import { WheelEventHandler, useCallback, useEffect, useRef, useState } from 'react'
+
+// v6 起 NumericInputProps.size 是 Blueprint 的 Size 变体，与 HTMLInputProps.size(number) 冲突，
+// 交叉后会塌成 never，这里从 HTML props 中剔除 size，保留 Blueprint 的 size 语义。
+type MixedNumericInputProps = Omit<HTMLInputProps, 'size'> & NumericInputProps
 
 export interface NumericInput2Props extends MixedNumericInputProps {
   intOnly?: boolean
+  onWheelFocused?: (e: React.WheelEvent<HTMLInputElement>) => void
+  wheelStepSize?: number
+
+  /**
+   * 当用户输入非数字字符时，是否触发 onValueChange 并传入 NaN 作为数值。
+   * 该选项不影响清空输入框的行为，清空输入框时始终会触发 onValueChange 并传入 NaN。
+   * @default false
+   */
+  emitNaNString?: boolean
 }
 
 export const NumericInput2 = ({
   intOnly,
   min,
+  max,
+  minorStepSize,
+  emitNaNString,
+  value,
   onValueChange,
+  onFocus,
+  onWheelFocused,
+  wheelStepSize,
+  inputClassName,
   ...props
 }: NumericInput2Props) => {
   const allowNegative = min === undefined || min < 0
+  const handleWheelRegistered = useRef(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [endsWithDot, setEndsWithDot] = useState(false)
+
+  if (minorStepSize && minorStepSize < 0.001) {
+    // not yet fixed in current version: https://github.com/palantir/blueprint/issues/4497
+    process.env.NODE_ENV === 'development' && console.warn('minorStepSize cannot be smaller than 0.001')
+
+    minorStepSize = 0.001
+  }
+
+  const handleWheelImpl = useRef<WheelEventHandler<HTMLInputElement>>(noop)
+  handleWheelImpl.current = (e) => {
+    onWheelFocused?.(e)
+    if (wheelStepSize) {
+      e.preventDefault()
+      const newValue = clamp(
+        (Number(value) || 0) - Math.sign(e.deltaY) * wheelStepSize,
+        min ?? -Number.MAX_VALUE,
+        max ?? Number.MAX_VALUE,
+      )
+      if (newValue !== value) {
+        onValueChange?.(newValue, String(newValue), e.currentTarget)
+      }
+    }
+  }
+
+  const handleWheel: WheelEventHandler<HTMLInputElement> = useCallback((e) => {
+    handleWheelImpl.current(e)
+  }, [])
+
+  useEffect(() => {
+    if (handleWheelRegistered.current) {
+      inputRef.current?.removeEventListener('wheel', handleWheel as any)
+      handleWheelRegistered.current = false
+    }
+  }, [handleWheel])
 
   return (
     <NumericInput
       allowNumericCharactersOnly
       min={min}
-      onValueChange={(num, str, inputEl) => {
-        if (!onValueChange) {
-          return
+      max={max}
+      minorStepSize={minorStepSize}
+      inputClassName={clsx(
+        (wheelStepSize !== undefined || onWheelFocused !== undefined) && 'focus:cursor-ns-resize',
+        inputClassName,
+      )}
+      inputRef={inputRef}
+      value={endsWithDot ? value + '.' : value}
+      onFocus={(e) => {
+        onFocus?.(e)
+        if ((onWheelFocused || wheelStepSize !== undefined) && !handleWheelRegistered.current) {
+          handleWheelRegistered.current = true
+          e.currentTarget.addEventListener('wheel', handleWheel as any, {
+            passive: false,
+          })
         }
-
+      }}
+      onBlur={(e) => {
+        setEndsWithDot(false)
+        if (handleWheelRegistered.current) {
+          e.currentTarget.removeEventListener('wheel', handleWheel as any)
+          handleWheelRegistered.current = false
+        }
+      }}
+      onButtonClick={(num, str) => onValueChange?.(num, str, inputRef.current)}
+      onValueChange={(num, str, inputEl) => {
         // count hyphens to determine the sign, so that user can toggle the sign
         // by pressing hyphen key, regardless of the cursor position
         let hyphens = 0
@@ -36,9 +113,25 @@ export const NumericInput2 = ({
           return ''
         })
 
+        const dots = str.split('.').length - 1
+
+        if (dots > 1 || (dots === 1 && intOnly)) {
+          return
+        }
+
+        setEndsWithDot(str.endsWith('.'))
+
+        if (str === '') {
+          onValueChange?.(NaN, str, inputEl)
+          return
+        }
+
         num = parseFloat(str)
 
         if (Number.isNaN(num) || !Number.isFinite(num)) {
+          if (emitNaNString) {
+            onValueChange?.(NaN, str, inputEl)
+          }
           return
         }
 
@@ -50,7 +143,7 @@ export const NumericInput2 = ({
           num = ~~num
         }
 
-        onValueChange(num, str, inputEl)
+        onValueChange?.(num, str, inputEl)
       }}
       {...props}
     />

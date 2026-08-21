@@ -1,39 +1,88 @@
 import { AppToaster } from 'components/Toaster'
 
+import { i18n } from '../i18n/i18n'
 import { CopilotDocV1 } from '../models/copilot.schema'
-import { OperationListItem } from '../models/operation'
-import { toShortCode } from '../models/shortCode'
+import { ShortCodeContent, toShortCode } from '../models/shortCode'
+import { formatError } from '../utils/error'
+import { OperationApi } from '../utils/zoot-plus-client'
 import { snakeCaseKeysUnicode } from '../utils/object'
+import { wrapErrorMessage } from '../utils/wrapErrorMessage'
+import { writeTextToClipboard } from 'utils/clipboard'
 
-export const handleDownloadJSON = (operationDoc: CopilotDocV1.Operation) => {
-  // pretty print the JSON
-  const json = JSON.stringify(
-    snakeCaseKeysUnicode(operationDoc, { deep: true }),
-    null,
-    2,
-  )
-  const blob = new Blob([json], {
+const doTriggerDownloadJSON = (content: string, filename: string) => {
+  const blob = new Blob([content], {
     type: 'application/json',
   })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `MAACopilot_${operationDoc.doc.title}.json`
+  link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+export const handleDownloadJSON = (operationDoc: CopilotDocV1.Operation) => {
+  // pretty print the JSON
+  const json = JSON.stringify(
+    // 类型对不上 https://github.com/bendrucker/snakecase-keys/issues/138
+    snakeCaseKeysUnicode(operationDoc as any),
+    null,
+    2,
+  )
+
+  doTriggerDownloadJSON(json, `PRTSPlus_${operationDoc.doc.title}.json`)
 
   AppToaster.show({
-    message: '已下载作业 JSON 文件，前往 MAA 选择即可使用~',
+    message: i18n.services.operation.json_downloaded,
     intent: 'success',
   })
 }
 
-export const handleCopyShortCode = (operation: OperationListItem) => {
-  const shortCode = toShortCode(operation.id)
-  navigator.clipboard.writeText(shortCode)
+export const handleLazyDownloadJSON = async (id: number, title: string) => {
+  const resp = await wrapErrorMessage(
+    (e) =>
+      i18n.services.operation.json_download_failed({
+        error: formatError(e),
+      }),
+    new OperationApi().getCopilotById({
+      id: id,
+    }),
+  )
 
-  AppToaster.show({
-    message: '已复制神秘代码，前往 MAA 粘贴即可使用~',
-    intent: 'success',
-  })
+  try {
+    const json = JSON.stringify(snakeCaseKeysUnicode(JSON.parse(resp.data!.content) as any), null, 2)
+    doTriggerDownloadJSON(json, `PRTSPlus_${title}.json`)
+    AppToaster.show({
+      message: i18n.services.operation.json_downloaded,
+      intent: 'success',
+    })
+  } catch (e) {
+    console.error(e)
+    AppToaster.show({
+      message: i18n.services.operation.json_data_error,
+      intent: 'danger',
+    })
+  }
+}
+
+/**
+ * @param target - Either an operation or an operation set
+ */
+export const copyShortCode = async (target: ShortCodeContent) => {
+  try {
+    const shortCode = toShortCode(target)
+    writeTextToClipboard(shortCode)
+
+    AppToaster.show({
+      message: i18n.services.operation.shortcode_copied,
+      intent: 'success',
+    })
+  } catch (e) {
+    AppToaster.show({
+      message: i18n.services.operation.shortcode_copy_failed({
+        error: formatError(e),
+      }),
+      intent: 'danger',
+    })
+  }
 }

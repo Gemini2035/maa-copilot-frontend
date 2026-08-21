@@ -1,67 +1,53 @@
-import { isNil } from 'lodash-es'
-import { useEffect } from 'react'
+import { CommentsAreaInfo, QueriesCommentsAreaRequest } from 'zoot-plus-client'
 import useSWRInfinite from 'swr/infinite'
 
-import { Response } from 'models/network'
-import { jsonRequest } from 'utils/fetcher'
+import { CommentApi } from 'utils/zoot-plus-client'
 
-import { CommentRating, MainCommentInfo } from '../models/comment'
-import { Operation, PaginatedResponse } from '../models/operation'
+import { i18n } from '../i18n/i18n'
+import { CommentRating } from '../models/comment'
+import { Operation } from '../models/operation'
 
-export interface CommentsQueryParams {
-  copilotId: number
-  page?: number
-  limit?: number
-  desc?: boolean
-  orderBy?: string
-}
-
-export interface UseCommentsParams
-  extends Omit<CommentsQueryParams, 'page' | 'copilotId'> {
-  suspense?: boolean
+export interface UseCommentsParams {
   operationId: Operation['id']
+  descending?: boolean
+  orderBy?: 'likeCount' | 'uploadTime'
+
+  suspense?: boolean
 }
 
-export const useComments = ({
-  operationId,
-  limit,
-  desc,
-  orderBy = 'uploadTime',
-  suspense,
-}: UseCommentsParams) => {
+export function useComments({ operationId, descending = true, orderBy, suspense }: UseCommentsParams) {
   const {
-    data: listData,
-    size,
+    data: pages,
     setSize,
     mutate,
     isValidating,
-  } = useSWRInfinite<Response<PaginatedResponse<MainCommentInfo>>>(
-    (pageIndex, previousPageData) => {
-      if (previousPageData && !previousPageData?.data.hasNext) {
+  } = useSWRInfinite(
+    (pageIndex, previousPage: CommentsAreaInfo) => {
+      if (previousPage && !previousPage?.hasNext) {
         return null // reached the end
       }
 
       if (!isFinite(+operationId)) {
-        throw new Error('operationId is not a valid number')
+        throw new Error(i18n.apis.comment.invalid_operation_id)
       }
 
-      const params: CommentsQueryParams = {
-        page: pageIndex + 1,
-        copilotId: +operationId,
-        limit,
-        desc,
-        orderBy,
-      }
-
-      const searchParams = new URLSearchParams()
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (!isNil(value)) {
-          searchParams.append(key, value.toString())
-        }
-      })
-
-      return `/comments/query?${searchParams.toString()}`
+      return [
+        'comments',
+        {
+          copilotId: operationId,
+          limit: 50,
+          page: pageIndex + 1,
+          desc: descending,
+          orderBy,
+        } satisfies QueriesCommentsAreaRequest,
+      ]
+    },
+    async ([, req]) => {
+      const res = await new CommentApi({
+        sendToken: 'never',
+        requireData: true,
+      }).queriesCommentsArea(req)
+      return res.data!
     },
     {
       suspense,
@@ -69,51 +55,39 @@ export const useComments = ({
     },
   )
 
-  const isReachingEnd = listData?.some((el) => !el.data.hasNext)
+  const isReachingEnd = pages?.some((page) => !page.hasNext)
 
-  const comments: MainCommentInfo[] =
-    listData?.map((el) => el.data.data).flat() || []
+  const comments = pages?.map((el) => el.data).flat()
 
-  useEffect(() => {
-    setSize(1)
-  }, [orderBy, limit, desc, operationId])
-
-  return { comments, size, setSize, mutate, isValidating, isReachingEnd }
+  return {
+    comments,
+    setSize,
+    mutate,
+    isValidating,
+    isReachingEnd,
+  }
 }
 
-export const requestAddComment = (
-  message: string,
-  operationId: Operation['id'],
-  fromCommentId?: string,
-) => {
-  return jsonRequest<Response<string>>('/comments/add', {
-    method: 'POST',
-    json: {
-      copilot_id: operationId,
-      message,
-      from_comment_id: fromCommentId,
+export async function sendComment(req: { message: string; operationId: number; fromCommentId?: number }) {
+  await new CommentApi().sendComments({
+    commentsAddDTO: {
+      message: req.message,
+      copilotId: req.operationId,
+      fromCommentId: req.fromCommentId,
+      notification: false,
+      commentStatus: 'ENABLED',
     },
   })
 }
 
-export const requestDeleteComment = (commentId: string) => {
-  return jsonRequest<Response<string>>('/comments/delete', {
-    method: 'POST',
-    json: {
-      comment_id: commentId,
-    },
-  })
+export async function deleteComment(req: { commentId: number }) {
+  await new CommentApi().deleteComments({ commentsDeleteDTO: req })
 }
 
-export const requestRateComment = (
-  commentId: string,
-  rating: CommentRating,
-) => {
-  return jsonRequest<Response<string>>('/comments/rating', {
-    method: 'POST',
-    json: {
-      comment_id: commentId,
-      rating,
-    },
-  })
+export async function rateComment(req: { commentId: number; rating: CommentRating }) {
+  await new CommentApi().ratesComments({ commentsRatingDTO: req })
+}
+
+export async function topComment(req: { commentId: number; topping: boolean }) {
+  await new CommentApi().toppingComments({ commentsToppingDTO: req })
 }

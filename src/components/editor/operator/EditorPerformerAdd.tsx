@@ -1,18 +1,13 @@
 import { Button, Card, MenuItem } from '@blueprintjs/core'
-import { Select2 } from '@blueprintjs/select'
+import { Select } from '@blueprintjs/select'
 
 import { FC, useMemo } from 'react'
 
 import type { CopilotDocV1 } from 'models/copilot.schema'
 
-import {
-  EditorPerformerGroup,
-  EditorPerformerGroupProps,
-} from './EditorPerformerGroup'
-import {
-  EditorPerformerOperator,
-  EditorPerformerOperatorProps,
-} from './EditorPerformerOperator'
+import { useTranslation } from '../../../i18n/i18n'
+import { EditorPerformerGroup, EditorPerformerGroupProps } from './EditorPerformerGroup'
+import { EditorPerformerOperator, EditorPerformerOperatorProps } from './EditorPerformerOperator'
 
 export type PerformerType = 'operator' | 'group'
 
@@ -32,11 +27,6 @@ interface PerformerSelectItem {
   value: PerformerType
 }
 
-const performerSelectItems: PerformerSelectItem[] = [
-  { label: '干员', value: 'operator' },
-  { label: '干员组', value: 'group' },
-]
-
 export const EditorPerformerAdd: FC<EditorPerformerAddProps> = ({
   mode,
   operator,
@@ -47,35 +37,48 @@ export const EditorPerformerAdd: FC<EditorPerformerAddProps> = ({
   submitOperator,
   submitGroup,
 }) => {
-  const selectedItem =
-    performerSelectItems.find((item) => item.value === mode) ||
-    performerSelectItems[0]
+  const t = useTranslation()
 
-  const selector = (
-    <>
-      添加
-      <Select2<PerformerSelectItem>
-        filterable={false}
-        items={performerSelectItems}
-        className="ml-1"
-        onItemSelect={(e) => onModeChange(e.value)}
-        itemRenderer={(action, { handleClick, handleFocus }) => (
-          <MenuItem
-            key={action.value}
-            selected={action.value === mode}
-            onClick={handleClick}
-            onFocus={handleFocus}
-            text={action.label}
-          />
-        )}
-      >
-        <Button
-          large
-          text={selectedItem.label}
-          rightIcon="double-caret-vertical"
-        />
-      </Select2>
-    </>
+  const performerSelectItems: PerformerSelectItem[] = useMemo(
+    () => [
+      {
+        label: t.components.editor.operator.EditorPerformerAdd.operator,
+        value: 'operator',
+      },
+      {
+        label: t.components.editor.operator.EditorPerformerAdd.operator_group,
+        value: 'group',
+      },
+    ],
+    [t],
+  )
+
+  const selectedItem = performerSelectItems.find((item) => item.value === mode) || performerSelectItems[0]
+
+  const selector = useMemo(
+    () => (
+      <>
+        {t.components.editor.operator.EditorPerformerAdd.add}
+        <Select<PerformerSelectItem>
+          filterable={false}
+          items={performerSelectItems}
+          className="ml-1"
+          onItemSelect={(e) => onModeChange(e.value)}
+          itemRenderer={(action, { handleClick, handleFocus }) => (
+            <MenuItem
+              key={action.value}
+              selected={action.value === mode}
+              onClick={handleClick}
+              onFocus={handleFocus}
+              text={action.label}
+            />
+          )}
+        >
+          <Button large text={selectedItem.label} rightIcon="double-caret-vertical" />
+        </Select>
+      </>
+    ),
+    [mode, onModeChange, selectedItem, performerSelectItems, t],
   )
 
   const child = useMemo(() => {
@@ -88,14 +91,9 @@ export const EditorPerformerAdd: FC<EditorPerformerAddProps> = ({
         groups={groups}
       />
     ) : (
-      <EditorPerformerGroup
-        group={group}
-        submit={submitGroup}
-        onCancel={onCancel}
-        categorySelector={selector}
-      />
+      <EditorPerformerGroup group={group} submit={submitGroup} onCancel={onCancel} categorySelector={selector} />
     )
-  }, [mode, submitOperator, submitGroup])
+  }, [mode, submitOperator, submitGroup, group, groups, onCancel, operator, selector])
 
   return <Card className="mb-8 pt-4">{child}</Card>
 }

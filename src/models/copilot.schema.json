@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
-  "title": "Maa Copilot Operation",
+  "title": "Copilot Operation",
   "properties": {
     "stage_name": {
       "$ref": "#/definitions/stage_name"
@@ -42,7 +42,7 @@
     "minimum_required": {
       "type": "string",
       "description": "Minimum required MAA version, need to match semantic version schema, required, reserved field, not implemented.",
-      "default": "v4.0.0",
+      "default": "v6.0.0",
       "pattern": "^v((0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?)$"
     },
     "doc": {
@@ -127,10 +127,8 @@
         },
         "module": {
           "type": "integer",
-          "description": "Module requirement, optional, 0 by default",
-          "minimum": 0,
-          "maximum": 1,
-          "default": 0
+          "description": "Module requirement, optional, -1 by default",
+          "default": -1
         },
         "potentiality": {
           "type": "integer",
@@ -219,18 +217,7 @@
         "direction": {
           "type": "string",
           "description": "Direction for deployment, required when `type` is \"Deploy (部署)\".",
-          "enum": [
-            "Left",
-            "Right",
-            "Up",
-            "Down",
-            "None",
-            "左",
-            "右",
-            "上",
-            "下",
-            "无"
-          ]
+          "enum": ["Left", "Right", "Up", "Down", "None", "左", "右", "上", "下", "无"]
         },
         "skill_usage": {
           "type": "integer",

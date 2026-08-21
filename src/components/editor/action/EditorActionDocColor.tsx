@@ -1,5 +1,5 @@
 import { Button, Icon, MenuItem } from '@blueprintjs/core'
-import { Select2 } from '@blueprintjs/select'
+import { Select } from '@blueprintjs/select'
 
 import { useController } from 'react-hook-form'
 import { SetOptional } from 'type-fest'
@@ -9,14 +9,13 @@ import { EditorFieldProps } from 'components/editor/EditorFieldProps'
 import type { CopilotDocV1 } from 'models/copilot.schema'
 import { actionDocColors } from 'models/operator'
 
-interface EditorActionDocColorProps
-  extends SetOptional<EditorFieldProps<CopilotDocV1.Action, string>, 'name'> {}
+import { useTranslation } from '../../../i18n/i18n'
 
-export const EditorActionDocColor = ({
-  name = 'docColor',
-  control,
-  ...controllerProps
-}: EditorActionDocColorProps) => {
+interface EditorActionDocColorProps extends SetOptional<EditorFieldProps<CopilotDocV1.Action, string>, 'name'> {}
+
+export const EditorActionDocColor = ({ name = 'docColor', control, ...controllerProps }: EditorActionDocColorProps) => {
+  const t = useTranslation()
+
   const {
     field: { onChange, onBlur, value, ref },
     formState: { errors },
@@ -31,12 +30,12 @@ export const EditorActionDocColor = ({
 
   return (
     <FormField2
-      label="描述颜色"
+      label={t.components.editor.action.EditorActionDocColor.description_color}
       field={name}
       error={errors[name]}
-      description="在 MAA 中打印描述时的颜色"
+      description={t.components.editor.action.EditorActionDocColor.color_description}
     >
-      <Select2
+      <Select
         filterable={false}
         items={actionDocColors}
         itemRenderer={(color, { handleClick, handleFocus, modifiers }) => (
@@ -47,12 +46,8 @@ export const EditorActionDocColor = ({
             onFocus={handleFocus}
             text={
               <span>
-                <Icon
-                  icon="full-circle"
-                  color={color?.value}
-                  className="mr-2"
-                />
-                <span style={{ color: color?.value }}>{color?.title}</span>
+                <Icon icon="full-circle" color={color?.value} className="mr-2" />
+                <span style={{ color: color?.value }}>{color?.title()}</span>
               </span>
             }
           />
@@ -60,12 +55,13 @@ export const EditorActionDocColor = ({
         onItemSelect={(item) => {
           onChange(item.value)
         }}
+        resetOnSelect={true}
       >
         <Button rightIcon="double-caret-vertical" onBlur={onBlur} ref={ref}>
           <Icon icon="full-circle" color={selected?.value} />
-          <span style={{ color: selected?.value }}>{selected?.title}</span>
+          <span style={{ color: selected?.value }}>{selected?.title()}</span>
         </Button>
-      </Select2>
+      </Select>
     </FormField2>
   )
 }

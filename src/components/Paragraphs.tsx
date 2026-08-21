@@ -20,7 +20,7 @@ export const Paragraphs: FC<{
     const { height } = paragraphElementRef.current.getBoundingClientRect()
 
     setExceededLimitHeight(height > limitHeight)
-  }, [paragraphElementRef.current, limitHeight])
+  }, [limitHeight])
 
   const mask = exceededLimitHeight
     ? 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) calc(100% - 2rem), rgba(0,0,0,0) 100%)'
@@ -28,7 +28,7 @@ export const Paragraphs: FC<{
 
   const child = (
     <div
-      className="text-gray-700 leading-normal"
+      className="text-gray-700 dark:[&_p]:text-gray-300 dark:[&_div]:text-gray-300 dark:[&_span]:text-gray-300 leading-normal"
       style={{
         maxHeight: limitHeight,
         overflow: 'hidden',
@@ -56,8 +56,7 @@ export const Paragraphs: FC<{
         },
         className: 'break-all',
         format: {
-          url: (value) =>
-            value.length > 50 ? value.slice(0, 50) + '…' : value,
+          url: (value) => (value.length > 50 ? value.slice(0, 50) + '…' : value),
         },
       }}
     >

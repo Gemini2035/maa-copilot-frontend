@@ -1,22 +1,21 @@
-import { Button, Icon, Menu, MenuItem } from '@blueprintjs/core'
-import { Popover2 } from '@blueprintjs/popover2'
+import { Button, Icon, Menu, MenuItem, PopoverNext } from '@blueprintjs/core'
 
 import { FC, useState } from 'react'
 
+import { useTranslation } from '../../../i18n/i18n'
 import { CopilotDocV1 } from '../../../models/copilot.schema'
 import { AppToaster } from '../../Toaster'
 import { FileImporter } from './FileImporter'
 import { ShortCodeImporter } from './ShortCodeImporter'
+import { writeTextToClipboard } from 'utils/clipboard'
 
 interface SourceEditorHeaderProps {
   text: string
   onChange: (text: string) => void
 }
 
-export const SourceEditorHeader: FC<SourceEditorHeaderProps> = ({
-  text,
-  onChange,
-}) => {
+export const SourceEditorHeader: FC<SourceEditorHeaderProps> = ({ text, onChange }) => {
+  const t = useTranslation()
   const [importDropdownOpen, setImportDropdownOpen] = useState(false)
 
   const handleImport = (text: string) => {
@@ -25,10 +24,10 @@ export const SourceEditorHeader: FC<SourceEditorHeaderProps> = ({
   }
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(text)
+    writeTextToClipboard(text)
 
     AppToaster.show({
-      message: '已复制 JSON 到剪贴板',
+      message: t.components.editor.source.SourceEditorHeader.json_copied,
       intent: 'success',
     })
   }
@@ -47,12 +46,12 @@ export const SourceEditorHeader: FC<SourceEditorHeaderProps> = ({
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `MAACopilot_${title || '未命名'}.json`
+    link.download = `PRTSPlus_${title || t.components.editor.source.SourceEditorHeader.untitled}.json`
     link.click()
     URL.revokeObjectURL(url)
 
     AppToaster.show({
-      message: '已下载作业 JSON 文件',
+      message: t.components.editor.source.SourceEditorHeader.job_json_downloaded,
       intent: 'success',
     })
   }
@@ -60,13 +59,14 @@ export const SourceEditorHeader: FC<SourceEditorHeaderProps> = ({
   return (
     <>
       <Icon icon="manually-entered-data" />
-      <span className="ml-2">编辑 JSON</span>
+      <span className="ml-2">{t.components.editor.source.SourceEditorHeader.edit_json}</span>
 
       <div className="flex-1" />
 
-      <Popover2
-        minimal
-        position="bottom-left"
+      <PopoverNext
+        animation="minimal"
+        arrow={false}
+        placement="bottom-start"
         isOpen={importDropdownOpen}
         onClose={() => setImportDropdownOpen(false)}
         content={
@@ -79,29 +79,34 @@ export const SourceEditorHeader: FC<SourceEditorHeaderProps> = ({
         <Button
           className="mr-4"
           icon="import"
-          text="导入"
+          text={t.components.editor.source.SourceEditorHeader.import}
           rightIcon="caret-down"
           onClick={() => setImportDropdownOpen(!importDropdownOpen)}
         />
-      </Popover2>
+      </PopoverNext>
 
-      <Popover2
-        minimal
-        position="bottom-left"
+      <PopoverNext
+        animation="minimal"
+        arrow={false}
+        placement="bottom-start"
         content={
           <Menu>
-            <MenuItem icon="clipboard" text="复制" onClick={handleCopy} />
-            <MenuItem icon="download" text="下载" onClick={handleDownload} />
+            <MenuItem icon="clipboard" text={t.components.editor.source.SourceEditorHeader.copy} onClick={handleCopy} />
+            <MenuItem
+              icon="download"
+              text={t.components.editor.source.SourceEditorHeader.download}
+              onClick={handleDownload}
+            />
           </Menu>
         }
       >
         <Button
           className="mr-4"
           icon="export"
-          text="导出"
+          text={t.components.editor.source.SourceEditorHeader.export}
           rightIcon="caret-down"
         />
-      </Popover2>
+      </PopoverNext>
     </>
   )
 }

@@ -4,38 +4,54 @@ import { ErrorBoundary } from '@sentry/react'
 import { ComponentType, Suspense, useEffect, useRef } from 'react'
 import { FCC } from 'types'
 
+import { useTranslation } from '../i18n/i18n'
+
 interface SuspensableProps {
   // deps that will cause the Suspense's error to reset
   retryDeps?: readonly any[]
 
-  pendingTitle?: string
+  pendingTitle?: string | (() => string)
 
   fetcher?: () => void
+  errorFallback?: (params: { error: Error }) => JSX.Element | undefined
 }
 
 export const Suspensable: FCC<SuspensableProps> = ({
   children,
   retryDeps = [],
-  pendingTitle = '加载中',
+  pendingTitle,
   fetcher,
+  errorFallback,
 }) => {
   const resetError = useRef<() => void>()
+  const t = useTranslation()
+
+  if (typeof pendingTitle === 'function') {
+    pendingTitle = pendingTitle()
+  }
+  pendingTitle ??= t.components.Suspensable.loading
 
   useEffect(() => {
     resetError.current?.()
     resetError.current = undefined
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, retryDeps)
 
   return (
     <ErrorBoundary
       fallback={({ resetError: _resetError, error }) => {
+        const fallback = errorFallback?.({ error })
+        if (fallback !== undefined) {
+          return fallback
+        }
+
         resetError.current = _resetError
 
         return (
           <NonIdealState
             icon="issue"
-            title="加载失败"
-            description={fetcher ? '数据加载失败，请尝试' : error.message}
+            title={t.components.Suspensable.loadFailed}
+            description={fetcher ? t.components.Suspensable.dataLoadFailedRetry : error.message}
             className="py-8"
             action={
               fetcher && (
@@ -48,7 +64,7 @@ export const Suspensable: FCC<SuspensableProps> = ({
                     fetcher()
                   }}
                 >
-                  重试
+                  {t.components.Suspensable.retry}
                 </Button>
               )
             }
@@ -56,15 +72,7 @@ export const Suspensable: FCC<SuspensableProps> = ({
         )
       }}
     >
-      <Suspense
-        fallback={
-          <NonIdealState
-            icon={<Spinner />}
-            title={pendingTitle}
-            className="py-8"
-          />
-        }
-      >
+      <Suspense fallback={<NonIdealState icon={<Spinner />} title={pendingTitle} className="py-8" />}>
         {children}
       </Suspense>
     </ErrorBoundary>
@@ -83,10 +91,7 @@ export function withSuspensable<P extends {}>(
 ): ComponentType<P> {
   const Wrapped: ComponentType<P> = (props) => {
     return (
-      <Suspensable
-        {...suspensableProps}
-        retryDeps={retryOnChange?.map((key) => props[key])}
-      >
+      <Suspensable {...suspensableProps} retryDeps={retryOnChange?.map((key) => props[key])}>
         <Component {...props} />
       </Suspensable>
     )

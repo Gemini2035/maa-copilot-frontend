@@ -1,14 +1,11 @@
 import { Button, Callout, Dialog, InputGroup } from '@blueprintjs/core'
 
+import { resetPassword, sendResetPasswordEmail } from 'apis/auth'
 import { FC, useState } from 'react'
 import { FieldErrors, useForm } from 'react-hook-form'
 
-import {
-  requestResetPassword,
-  requestResetPasswordToken,
-} from '../../apis/auth'
+import { useTranslation } from '../../i18n/i18n'
 import { formatError } from '../../utils/error'
-import { NetworkError } from '../../utils/fetcher'
 import { useNetworkState } from '../../utils/useNetworkState'
 import { wrapErrorMessage } from '../../utils/wrapErrorMessage'
 import { FormField } from '../FormField'
@@ -27,10 +24,9 @@ interface FormValues {
   password: string
 }
 
-export const ResetPasswordDialog: FC<ResetPasswordDialogProps> = ({
-  isOpen,
-  onClose,
-}) => {
+export const ResetPasswordDialog: FC<ResetPasswordDialogProps> = ({ isOpen, onClose }) => {
+  const t = useTranslation()
+
   const {
     control,
     handleSubmit,
@@ -43,11 +39,15 @@ export const ResetPasswordDialog: FC<ResetPasswordDialogProps> = ({
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      await requestResetPassword(values)
+      await resetPassword({
+        email: values.email,
+        activeCode: values.token,
+        password: values.password,
+      })
 
       AppToaster.show({
         intent: 'success',
-        message: `重置成功，请重新登录`,
+        message: t.components.account.ResetPasswordDialog.reset_success,
       })
       onClose()
     } catch (e) {
@@ -59,7 +59,7 @@ export const ResetPasswordDialog: FC<ResetPasswordDialogProps> = ({
   return (
     <Dialog
       usePortal={false}
-      title="重置密码"
+      title={t.components.account.ResetPasswordDialog.reset_password}
       icon="key"
       isOpen={isOpen}
       onClose={onClose}
@@ -68,7 +68,7 @@ export const ResetPasswordDialog: FC<ResetPasswordDialogProps> = ({
         <GlobalErrorBoundary>
           <form>
             {globalError && (
-              <Callout intent="danger" icon="error" title="错误">
+              <Callout intent="danger" icon="error" title={t.components.account.ResetPasswordDialog.error}>
                 {globalError}
               </Callout>
             )}
@@ -78,38 +78,31 @@ export const ResetPasswordDialog: FC<ResetPasswordDialogProps> = ({
               control={control}
               error={errors.email}
               inputGroupProps={({ field, fieldState }) => ({
-                rightElement: (
-                  <RequestTokenButton
-                    email={field.value}
-                    disabled={!!fieldState.error}
-                  />
-                ),
+                rightElement: <RequestTokenButton email={field.value} disabled={!!fieldState.error} />,
               })}
             />
 
             <FormField
-              label="验证码"
+              label={t.components.account.ResetPasswordDialog.verification_code}
               field="token"
               control={control}
               error={errors.token}
               ControllerProps={{
-                rules: { required: '验证码为必填项' },
+                rules: {
+                  required: t.components.account.ResetPasswordDialog.code_required,
+                },
                 render: ({ field: { value, ...binding } }) => (
                   <InputGroup
                     id="token"
                     value={value || ''}
-                    placeholder="请填入邮件中的验证码"
+                    placeholder={t.components.account.ResetPasswordDialog.enter_email_code}
                     {...binding}
                   />
                 ),
               }}
             />
 
-            <AuthFormPasswordField
-              field="password"
-              control={control}
-              error={errors.password}
-            />
+            <AuthFormPasswordField field="password" control={control} error={errors.password} />
 
             <div className="mt-6 flex justify-end">
               <Button
@@ -124,7 +117,7 @@ export const ResetPasswordDialog: FC<ResetPasswordDialogProps> = ({
                   onSubmit(e)
                 }}
               >
-                保存
+                {t.components.account.ResetPasswordDialog.save}
               </Button>
             </div>
           </form>
@@ -134,27 +127,25 @@ export const ResetPasswordDialog: FC<ResetPasswordDialogProps> = ({
   )
 }
 
-const RequestTokenButton = ({
-  email,
-  disabled,
-}: {
-  email: string
-  disabled: boolean
-}) => {
+const RequestTokenButton = ({ email, disabled }: { email: string; disabled: boolean }) => {
+  const t = useTranslation()
   const { networkState, start, finish } = useNetworkState()
   const [sent, setSent] = useState(false)
 
   const handleClick = () => {
     start()
     wrapErrorMessage(
-      (e: NetworkError) => `获取验证码失败：${e.message}`,
-      requestResetPasswordToken({ email }),
+      (e) =>
+        t.components.account.ResetPasswordDialog.get_code_failed({
+          error: formatError(e),
+        }),
+      sendResetPasswordEmail({ email }),
     )
       .then(() => {
         finish(null)
         setSent(true)
         AppToaster.show({
-          message: '验证码已发送至您的邮箱',
+          message: t.components.account.ResetPasswordDialog.code_sent,
           intent: 'success',
         })
       })
@@ -170,7 +161,7 @@ const RequestTokenButton = ({
       onClick={handleClick}
       loading={networkState.loading}
     >
-      {sent ? '重新发送' : '获取验证码'}
+      {sent ? t.components.account.ResetPasswordDialog.resend : t.components.account.ResetPasswordDialog.get_code}
     </Button>
   )
 }

@@ -9,6 +9,27 @@ import { findActionType } from '../../models/types'
 import { snakeCaseKeysUnicode } from '../../utils/object'
 
 /**
+ * JSON schema treats absent optional fields and `null` fields differently:
+ * absent fields pass validation, while `null` fails type checks.
+ * Remove all `null` object fields recursively before exporting.
+ */
+const removeNullFields = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(removeNullFields)
+  }
+
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, fieldValue]) => fieldValue !== null)
+        .map(([key, fieldValue]) => [key, removeNullFields(fieldValue)]),
+    )
+  }
+
+  return value
+}
+
+/**
  * Creates an operation that can be used in editor. Used for importing.
  */
 export function toEditableOperation(
@@ -18,12 +39,7 @@ export function toEditableOperation(
 
   // generate IDs
   compact(
-    [
-      operation.actions,
-      operation.opers,
-      operation.groups,
-      operation.groups?.map((group) => group?.opers),
-    ].flat(2),
+    [operation.actions, operation.opers, operation.groups, operation.groups?.map((group) => group?.opers)].flat(2),
   ).forEach((item) => {
     item._id = uniqueId()
   })
@@ -56,18 +72,13 @@ export function toEditableOperation(
 export function toMaaOperation(
   operation: DeepPartial<CopilotDocV1.Operation>,
 ): DeepPartial<CopilotDocV1.OperationSnakeCased> {
-  operation = JSON.parse(JSON.stringify(operation))
+  operation = removeNullFields(JSON.parse(JSON.stringify(operation))) as DeepPartial<CopilotDocV1.Operation>
 
   operation.minimumRequired ||= MinimumRequired.V4_0_0
 
   // strip IDs
   compact(
-    [
-      operation.actions,
-      operation.opers,
-      operation.groups,
-      operation.groups?.map((group) => group?.opers),
-    ].flat(2),
+    [operation.actions, operation.opers, operation.groups, operation.groups?.map((group) => group?.opers)].flat(2),
   ).forEach((item) => {
     delete item._id
 
@@ -81,9 +92,7 @@ export function toMaaOperation(
 /**
  * Attempts to patch the operation to satisfy the JSON schema.
  */
-export function patchOperation(
-  operation: DeepPartial<CopilotDocV1.OperationSnakeCased>,
-) {
+export function patchOperation(operation: DeepPartial<CopilotDocV1.OperationSnakeCased>) {
   if (operation.doc) {
     operation.doc.details ||= operation.doc.title
   }

@@ -1,12 +1,11 @@
 import useSWR from 'swr'
 
+import { i18n } from '../i18n/i18n'
 import mockFile from './mock/announcements.md?url'
 
 const isMock = process.env.NODE_ENV === 'development'
 
-const announcementURL = isMock
-  ? mockFile
-  : 'https://ota.maa.plus/MaaAssistantArknights/api/announcements/copilot.md'
+const announcementURL = isMock ? mockFile : 'https://api.maa.plus/MaaAssistantArknights/api/announcements/copilot.md'
 
 export const announcementBaseURL = isMock
   ? location.href
@@ -20,8 +19,7 @@ export function useAnnouncement() {
         .then((res) => res.text())
         .catch((e) => {
           if ((e as Error).message === 'Failed to fetch') {
-            console.warn(e)
-            throw new Error('网络错误')
+            throw new Error(i18n.apis.announcement.network_error)
           }
 
           throw e

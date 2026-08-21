@@ -1,21 +1,11 @@
-import { Tag } from '@blueprintjs/core'
-import { Tooltip2 } from '@blueprintjs/popover2'
+import { Tag, Tooltip } from '@blueprintjs/core'
 
 import clsx from 'clsx'
 import { FC, ReactNode } from 'react'
 
 import { OpDifficulty, OpDifficultyBitFlag } from 'models/operation'
 
-const descriptions = {
-  regular: {
-    title: '普通',
-    description: '本作业支持普通难度作战',
-  },
-  hard: {
-    title: '突袭',
-    description: '本作业支持突袭难度作战',
-  },
-}
+import { useTranslation } from '../../i18n/i18n'
 
 const DifficultyTag: FC<{
   tooltip?: string | JSX.Element
@@ -23,27 +13,36 @@ const DifficultyTag: FC<{
   hardLevel?: boolean
 }> = ({ tooltip, content, hardLevel }) => {
   return (
-    <Tooltip2
-      placement="bottom"
-      content={<div className="max-w-sm">{tooltip}</div>}
-    >
+    <Tooltip placement="bottom" content={<div className="max-w-sm">{tooltip}</div>}>
       <Tag
         className={clsx(
           'transition border border-solid !text-xs cursor-help tracking-tight !px-2 !py-1 !mx-1 !my-1 leading-none !min-h-0',
           hardLevel
             ? 'bg-red-400 hover:bg-red-500 border-red-700 text-red-900'
-            : 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-700',
+            : 'bg-slate-200 hover:bg-slate-300 border-slate-300  text-slate-700 dark:bg-slate-900 dark:text-slate-100',
         )}
       >
         {content}
       </Tag>
-    </Tooltip2>
+    </Tooltip>
   )
 }
 
 export const EDifficulty: FC<{
   difficulty: OpDifficulty
 }> = ({ difficulty }) => {
+  const t = useTranslation()
+  const descriptions = {
+    regular: {
+      title: t.components.entity.EDifficulty.regular,
+      description: t.components.entity.EDifficulty.regular_description,
+    },
+    hard: {
+      title: t.components.entity.EDifficulty.hard,
+      description: t.components.entity.EDifficulty.hard_description,
+    },
+  }
+
   if (difficulty === OpDifficulty.UNKNOWN) {
     return <></>
     // return (
@@ -73,22 +72,13 @@ export const EDifficulty: FC<{
 
   if (difficulty & OpDifficultyBitFlag.REGULAR) {
     children.push(
-      <DifficultyTag
-        key="regular"
-        tooltip={descriptions.regular.description}
-        content={descriptions.regular.title}
-      />,
+      <DifficultyTag key="regular" tooltip={descriptions.regular.description} content={descriptions.regular.title} />,
     )
   }
 
   if (difficulty & OpDifficultyBitFlag.HARD) {
     children.push(
-      <DifficultyTag
-        key="hard"
-        tooltip={descriptions.hard.description}
-        content={descriptions.hard.title}
-        hardLevel
-      />,
+      <DifficultyTag key="hard" tooltip={descriptions.hard.description} content={descriptions.hard.title} hardLevel />,
     )
   }
 

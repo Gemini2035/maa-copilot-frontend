@@ -1,9 +1,10 @@
 import { Button, Card, Checkbox, TextArea } from '@blueprintjs/core'
 
+import { sendComment } from 'apis/comment'
 import clsx from 'clsx'
 import { useContext, useState } from 'react'
 
-import { requestAddComment } from '../../../apis/comment'
+import { useTranslation } from '../../../i18n/i18n'
 import { MAX_COMMENT_LENGTH } from '../../../models/comment'
 import { formatError } from '../../../utils/error'
 import { wrapErrorMessage } from '../../../utils/wrapErrorMessage'
@@ -16,15 +17,20 @@ export interface CommentFormProps {
   primary?: boolean
   placeholder?: string
   inputAutoFocus?: boolean
+  maxLength?: number
 }
 
 export const CommentForm = ({
   className,
   primary,
-  placeholder = '发一条友善的评论吧',
+  placeholder,
   inputAutoFocus,
+  maxLength = MAX_COMMENT_LENGTH,
 }: CommentFormProps) => {
+  const t = useTranslation()
   const { operationId, replyTo, reload } = useContext(CommentAreaContext)
+
+  const defaultPlaceholder = t.components.viewer.comment.friendly_comment_placeholder
 
   const [message, setMessage] = useState('')
   const [showMarkdownPreview, setShowMarkdownPreview] = useState(false)
@@ -34,7 +40,7 @@ export const CommentForm = ({
     if (!message.trim()) {
       AppToaster.show({
         intent: 'primary',
-        message: '请输入评论内容',
+        message: t.components.viewer.comment.enter_comment,
       })
       return
     }
@@ -45,32 +51,34 @@ export const CommentForm = ({
 
     setIsSubmitting(true)
 
-    try {
-      await wrapErrorMessage(
-        (e) => '发表评论失败：' + formatError(e),
-        (async () => {
-          if (primary) {
-            // this comment is a main comment and does not reply to others
-            await requestAddComment(message, operationId)
-          } else {
-            if (!replyTo) {
-              throw new Error('要回复的评论不存在')
-            }
-            await requestAddComment(message, operationId, replyTo?.commentId)
+    await wrapErrorMessage(
+      (e) => t.components.viewer.comment.submit_failed({ error: formatError(e) }),
+      (async () => {
+        if (primary) {
+          // this comment is a main comment and does not reply to others
+          await sendComment({ message, operationId })
+        } else {
+          if (!replyTo) {
+            throw new Error(t.components.viewer.comment.reply_target_not_found)
           }
-        })(),
-      )
+          await sendComment({
+            message,
+            operationId,
+            fromCommentId: replyTo?.commentId,
+          })
+        }
 
-      AppToaster.show({
-        intent: 'success',
-        message: `发表成功`,
-      })
+        AppToaster.show({
+          intent: 'success',
+          message: t.components.viewer.comment.submit_success,
+        })
 
-      setMessage('')
-      reload()
-    } finally {
-      setIsSubmitting(false)
-    }
+        setMessage('')
+      })(),
+    ).catch(console.warn)
+
+    reload()
+    setIsSubmitting(false)
   }
 
   return (
@@ -78,10 +86,10 @@ export const CommentForm = ({
       <TextArea
         fill
         rows={2}
-        growVertically
+        autoResize
         large
-        maxLength={MAX_COMMENT_LENGTH}
-        placeholder={placeholder}
+        maxLength={maxLength}
+        placeholder={placeholder || defaultPlaceholder}
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         // eslint-disable-next-line jsx-a11y/no-autofocus
@@ -89,33 +97,26 @@ export const CommentForm = ({
       />
 
       <div className="mt-2 flex flex-wrap items-center">
-        <Button
-          icon="send-message"
-          intent="primary"
-          loading={isSubmitting}
-          onClick={handleSubmit}
-        >
-          {primary ? '发表评论' : '回复'}
+        <Button icon="send-message" intent="primary" loading={isSubmitting} onClick={handleSubmit}>
+          {primary ? t.components.viewer.comment.post_comment : t.components.viewer.comment.reply}
         </Button>
 
         <Checkbox
           className="mb-0 ml-6"
           checked={showMarkdownPreview}
-          onChange={(e) =>
-            setShowMarkdownPreview((e.target as HTMLInputElement).checked)
-          }
+          onChange={(e) => setShowMarkdownPreview((e.target as HTMLInputElement).checked)}
         >
-          预览 Markdown
+          {t.components.viewer.comment.preview_markdown}
         </Checkbox>
 
         <div className="ml-auto text-slate-500 text-sm">
-          {message.length}/{MAX_COMMENT_LENGTH}
+          {message.length}/{maxLength}
         </div>
       </div>
 
       {showMarkdownPreview && (
         <Card className="mt-2 border-2">
-          <Markdown>{message || '*没有内容*'}</Markdown>
+          <Markdown>{message || t.components.viewer.comment.no_content}</Markdown>
         </Card>
       )}
     </form>

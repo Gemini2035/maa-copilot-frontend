@@ -7,18 +7,12 @@ import { createPortal } from 'react-dom'
 import { Rnd, RndResizeCallback } from 'react-rnd'
 import { useWindowSize } from 'react-use'
 
+import { useTranslation } from '../../../i18n/i18n'
 import { Level } from '../../../models/operation'
 import { sendMessage, useMessage } from '../../../utils/messenger'
 import { useLazyStorage } from '../../../utils/useLazyStorage'
 import { useFloatingMap } from './FloatingMapContext'
-import {
-  CheckMapMessage,
-  ErrorMessage,
-  MAP_ORIGIN,
-  MapReadyMessage,
-  SetMapStateMessage,
-  getMapUrl,
-} from './connection'
+import { CheckMapMessage, ErrorMessage, MAP_ORIGIN, MapReadyMessage, SetMapStateMessage, getMapUrl } from './connection'
 
 interface FloatingMapConfig {
   show: boolean
@@ -30,7 +24,7 @@ interface FloatingMapConfig {
 }
 
 const UID = 'floating-map'
-const STORAGE_KEY = `copilot-${UID}`
+const STORAGE_KEY = `zoot-plus-${UID}`
 
 const HEADER_CLASS = 'floating-map-header'
 
@@ -48,6 +42,8 @@ const enum MapStatus {
 }
 
 export function FloatingMap() {
+  const t = useTranslation()
+
   const [config, setConfig] = useLazyStorage<FloatingMapConfig>(
     STORAGE_KEY,
     {
@@ -70,7 +66,7 @@ export function FloatingMap() {
       x: clamp(cfg.x, 0, windowWidth - cfg.width),
       y: clamp(cfg.y, 0, windowHeight - cfg.height),
     }))
-  }, [windowWidth, windowHeight])
+  }, [setConfig, windowWidth, windowHeight])
 
   const [iframeWindow, setIframeWindow] = useState<Window | null | undefined>()
   const [mapStatus, setMapStatus] = useState(MapStatus.Loading)
@@ -81,7 +77,7 @@ export function FloatingMap() {
     // when level changes, the iframe should reload
     setMapStatus(MapStatus.Loading)
     setConfig((cfg) => ({ ...cfg, level }))
-  }, [level])
+  }, [setConfig, level])
 
   const setMapState = useCallback(() => {
     if (iframeWindow) {
@@ -136,7 +132,7 @@ export function FloatingMap() {
       toggleIframePointerEvents(false)
       setConfig((cfg) => ({ ...cfg, x, y }))
     },
-    [toggleIframePointerEvents],
+    [setConfig, toggleIframePointerEvents],
   )
 
   const onResizeStartHandler = useCallback(() => {
@@ -153,7 +149,7 @@ export function FloatingMap() {
         height: parseFloat(ref.style.height),
       }))
     },
-    [toggleIframePointerEvents],
+    [setConfig, toggleIframePointerEvents],
   )
 
   return createPortal(
@@ -174,10 +170,7 @@ export function FloatingMap() {
           onResizeStart={onResizeStartHandler}
           onResizeStop={onResizeStopHandler}
         >
-          <Card
-            className="h-full !p-0 flex flex-col overflow-hidden"
-            elevation={3}
-          >
+          <Card className="h-full !p-0 flex flex-col overflow-hidden" elevation={3}>
             <FloatingMapHeader config={config} setConfig={setConfig} />
             {level ? (
               <div className="relative flex-grow">
@@ -186,31 +179,29 @@ export function FloatingMap() {
                   className="w-full h-full"
                   src={getMapUrl(level)}
                   onLoad={(e) => {
-                    setIframeWindow(
-                      (e.target as HTMLIFrameElement).contentWindow,
-                    )
+                    setIframeWindow((e.target as HTMLIFrameElement).contentWindow)
                   }}
                 />
                 {mapStatus === MapStatus.Loading && (
                   <NonIdealState
                     className="absolute inset-0 bg-gray-900/50 [&_*]:!text-white"
-                    icon={
-                      <Spinner className="[&_.bp4-spinner-head]:stroke-current" />
+                    icon={<Spinner className="[&_.bp6-spinner-head]:stroke-current" />}
+                    description={
+                      iframeWindow ? undefined : t.components.editor.floatingMap.FloatingMap.waiting_connection
                     }
-                    description={iframeWindow ? undefined : '等待地图连接...'}
                   />
                 )}
               </div>
             ) : (
-              <NonIdealState icon="area-of-interest" title="未选择关卡" />
+              <NonIdealState
+                icon="area-of-interest"
+                title={t.components.editor.floatingMap.FloatingMap.no_stage_selected}
+              />
             )}
           </Card>
         </Rnd>
       ) : (
-        <Card
-          className="absolute !p-0 overflow-hidden pointer-events-auto left-4 bottom-4"
-          elevation={2}
-        >
+        <Card className="absolute !p-0 overflow-hidden pointer-events-auto left-4 bottom-4" elevation={2}>
           <FloatingMapHeader config={config} setConfig={setConfig} />
         </Card>
       )}
@@ -229,12 +220,13 @@ function FloatingMapHeader({
   config: FloatingMapConfig
   setConfig: (config: FloatingMapConfig) => void
 }) {
+  const t = useTranslation()
   let levelName = config.level?.name
 
   if (isNil(levelName)) {
-    levelName = '未选择关卡'
+    levelName = t.components.editor.floatingMap.FloatingMap.no_stage_selected
   } else if (!levelName.trim()) {
-    levelName = '未命名关卡'
+    levelName = t.components.editor.floatingMap.FloatingMap.unnamed_stage
   }
 
   return (
@@ -251,11 +243,15 @@ function FloatingMapHeader({
         minimal
         style={{ height: HEADER_HEIGHT }}
         className="px-4"
-        title={config.show ? '隐藏地图' : '显示地图'}
+        title={
+          config.show
+            ? t.components.editor.floatingMap.FloatingMap.hide_map
+            : t.components.editor.floatingMap.FloatingMap.show_map
+        }
         icon={config.show ? 'caret-down' : 'caret-up'}
         onClick={() => setConfig({ ...config, show: !config.show })}
       >
-        地图
+        {t.components.editor.floatingMap.FloatingMap.map}
         {config.show && ` - ${levelName}`}
       </Button>
     </div>

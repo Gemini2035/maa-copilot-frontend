@@ -1,141 +1,251 @@
-import {
-  Button,
-  ButtonGroup,
-  Card,
-  FormGroup,
-  InputGroup,
-} from '@blueprintjs/core'
+import { Button, ButtonGroup, Card, Divider, H6, InputGroup, Tab, Tabs } from '@blueprintjs/core'
 
-import { UseOperationsParams } from 'apis/query'
+import { UseOperationsParams } from 'apis/operation'
+import clsx from 'clsx'
 import { useAtom } from 'jotai'
 import { debounce } from 'lodash-es'
+import { MaaUserInfo } from 'zoot-plus-client'
 import { ComponentType, useMemo, useState } from 'react'
 
 import { CardTitle } from 'components/CardTitle'
 import { OperationList } from 'components/OperationList'
+import { OperationSetList } from 'components/OperationSetList'
+import { neoLayoutAtom } from 'store/pref'
 
-import { authAtom } from '../store/auth'
-import { OperatorSelect } from './OperatorSelect'
+import { useTranslation } from '../i18n/i18n'
+import { CopilotType } from '../models/operation'
+import { LevelSelect } from './LevelSelect'
+import { OperatorFilter, useOperatorFilter } from './OperatorFilter'
+import { OperatorMatcher } from './OperatorMatcher'
 import { withSuspensable } from './Suspensable'
+import { UserFilter } from './UserFilter'
+import { OperatorMatcherFilter } from '../models/operatorMatcher'
 
 export const Operations: ComponentType = withSuspensable(() => {
-  const [queryParams, setQueryParams] = useState<UseOperationsParams>({
+  const t = useTranslation()
+  const [queryParams, setQueryParams] = useState<Omit<UseOperationsParams, 'operator'>>({
+    limit: 10,
     orderBy: 'hot',
   })
-  const debouncedSetQueryParams = useMemo(
-    () => debounce(setQueryParams, 500),
-    [],
-  )
-  const [authState] = useAtom(authAtom)
+  const debouncedSetQueryParams = useMemo(() => debounce(setQueryParams, 500), [])
+
+  const { operatorFilter, setOperatorFilter } = useOperatorFilter()
+  const [selectedUser, setSelectedUser] = useState<MaaUserInfo>()
+  const [neoLayout, setNeoLayout] = useAtom(neoLayoutAtom)
+  const [tab, setTab] = useState<'operation' | 'operationSet'>('operation')
+  const [multiselect, setMultiselect] = useState(false)
+  const [operatorMatcher, setOperatorMatcher] = useState<OperatorMatcherFilter>()
 
   return (
     <>
       <Card className="flex flex-col mb-4">
-        <CardTitle className="mb-4" icon="properties">
-          查找作业
-        </CardTitle>
-        <FormGroup
-          helperText={
-            queryParams.operator?.length
-              ? '点击干员标签以标记为排除该干员'
-              : undefined
-          }
-          label="搜索"
-          className="mt-2 max-w-md"
-        >
-          <InputGroup
-            className="[&>input]:!rounded-md"
-            placeholder="标题、描述、神秘代码"
-            leftIcon="search"
-            size={64}
+        <CardTitle className="mb-6 flex" icon="properties">
+          <Tabs
+            className="pl-2 [&>div]:space-x-2 [&>div]:space-x-reverse"
+            id="operation-tabs"
             large
-            type="search"
-            enterKeyHint="search"
-            onChange={(e) =>
-              debouncedSetQueryParams((old) => ({
-                ...old,
-                document: e.target.value.trim(),
-              }))
-            }
-            onBlur={() => debouncedSetQueryParams.flush()}
+            selectedTabId={tab}
+            onChange={(newTab) => setTab(newTab as 'operation' | 'operationSet')}
+          >
+            <Tab
+              className={clsx('text-inherit', tab !== 'operation' && 'opacity-75')}
+              id="operation"
+              title={t.components.Operations.operations}
+            />
+            <Divider className="self-center h-[1em]" />
+            <Tab
+              className={clsx('text-inherit', tab !== 'operationSet' && 'opacity-75')}
+              id="operationSet"
+              title={t.components.Operations.operation_sets}
+            />
+          </Tabs>
+          <Button
+            minimal
+            icon="multi-select"
+            title={t.components.Operations.enable_multi_select}
+            className="ml-auto mr-2"
+            active={multiselect}
+            onClick={() => setMultiselect((v) => !v)}
           />
-          <InputGroup
-            className="mt-2 [&>input]:!rounded-md"
-            placeholder="关卡名、关卡类型、关卡编号"
-            leftIcon="area-of-interest"
-            size={64}
-            large
-            type="search"
-            enterKeyHint="search"
-            onChange={(e) =>
-              debouncedSetQueryParams((old) => ({
-                ...old,
-                levelKeyword: e.target.value.trim(),
-              }))
-            }
-            onBlur={() => debouncedSetQueryParams.flush()}
-          />
-          <OperatorSelect
-            className="mt-2"
-            operators={queryParams.operator?.split(',') || []}
-            onChange={(operators) =>
-              setQueryParams((old) => ({
-                ...old,
-                operator: operators.join(','),
-              }))
-            }
-          />
-        </FormGroup>
-        <FormGroup label="排序" contentClassName="flex flex-wrap gap-y-2">
           <ButtonGroup>
-            <Button
-              icon="flame"
-              active={queryParams.orderBy === 'hot'}
-              onClick={() => {
-                setQueryParams((old) => ({ ...old, orderBy: 'hot' }))
-              }}
-            >
-              热度
-            </Button>
-            <Button
-              icon="time"
-              active={queryParams.orderBy === 'id'}
-              onClick={() => {
-                setQueryParams((old) => ({ ...old, orderBy: 'id' }))
-              }}
-            >
-              最新
-            </Button>
-            <Button
-              icon="eye-open"
-              active={queryParams.orderBy === 'views'}
-              onClick={() => {
-                setQueryParams((old) => ({ ...old, orderBy: 'views' }))
-              }}
-            >
-              访问量
-            </Button>
+            <Button icon="grid-view" active={neoLayout} onClick={() => setNeoLayout(true)} />
+            <Button icon="list" active={!neoLayout} onClick={() => setNeoLayout(false)} />
           </ButtonGroup>
+        </CardTitle>
+        {tab === 'operation' && (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <InputGroup
+                className="max-w-md [&>input]:!rounded-md"
+                placeholder={t.components.Operations.search_placeholder}
+                leftIcon="search"
+                large
+                type="search"
+                enterKeyHint="search"
+                defaultValue={queryParams.keyword}
+                onChange={(e) =>
+                  debouncedSetQueryParams((old) => ({
+                    ...old,
+                    keyword: e.target.value.trim(),
+                  }))
+                }
+                onBlur={() => debouncedSetQueryParams.flush()}
+              />
+              <div className="flex flex-wrap gap-1">
+                <LevelSelect
+                  value={queryParams.levelKeyword ?? ''}
+                  onChange={(level) =>
+                    setQueryParams((old) => ({
+                      ...old,
+                      levelKeyword: level,
+                    }))
+                  }
+                />
+                <UserFilter
+                  user={selectedUser}
+                  onlyFollowing={queryParams.onlyFollowing}
+                  onChange={(user) => {
+                    setSelectedUser(user)
+                    setQueryParams((old) => ({
+                      ...old,
+                      uploaderId: user?.id,
+                      onlyFollowing: undefined,
+                    }))
+                  }}
+                  onOnlyFollowingChange={(following) => {
+                    setQueryParams((old) => ({
+                      ...old,
+                      onlyFollowing: following || undefined,
+                      uploaderId: undefined,
+                    }))
+                  }}
+                />
+                <ButtonGroup className="flex-wrap">
+                  {(
+                    [
+                      { type: undefined, text: t.components.Operations.type_all },
+                      { type: CopilotType.PRTS, text: t.components.Operations.type_prts },
+                      { type: CopilotType.VIDEO, text: t.components.Operations.type_video },
+                    ] as const
+                  ).map(({ type, text }) => (
+                    <Button
+                      key={type ?? 'all'}
+                      active={queryParams.type === type}
+                      intent={queryParams.type === type ? 'primary' : 'none'}
+                      onClick={() => setQueryParams((old) => ({ ...old, type }))}
+                    >
+                      {text}
+                    </Button>
+                  ))}
+                </ButtonGroup>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-4 mt-2">
+              <OperatorFilter className="" filter={operatorFilter} onChange={setOperatorFilter} />
+              <div className="flex flex-wrap items-center ml-auto">
+                <H6 className="mb-0 mr-1 opacity-75">{t.components.Operations.sort_by}</H6>
+                <ButtonGroup minimal className="flex-wrap">
+                  {(
+                    [
+                      {
+                        icon: 'flame',
+                        text: t.components.Operations.popularity,
+                        orderBy: 'hot',
+                        active: queryParams.orderBy === 'hot',
+                      },
+                      {
+                        icon: 'time',
+                        text: t.components.Operations.newest,
+                        orderBy: 'id',
+                        active: queryParams.orderBy === 'id',
+                      },
+                      {
+                        icon: 'eye-open',
+                        text: t.components.Operations.views,
+                        orderBy: 'views',
+                        active: queryParams.orderBy === 'views',
+                      },
+                    ] as const
+                  ).map(({ icon, text, orderBy, active }) => (
+                    <Button
+                      key={orderBy}
+                      className={clsx(
+                        '!px-2 !py-1 !border-none [&>.bp6-icon]:!mr-1',
+                        !active && 'opacity-75 !font-normal',
+                      )}
+                      icon={icon}
+                      intent={active ? 'primary' : 'none'}
+                      onClick={() => {
+                        setQueryParams((old) => ({ ...old, orderBy }))
+                      }}
+                    >
+                      {text}
+                    </Button>
+                  ))}
+                </ButtonGroup>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <OperatorMatcher onChange={setOperatorMatcher} />
+            </div>
+          </>
+        )}
 
-          {!!authState.token && (
-            <Button
-              className="ml-auto"
-              icon="user"
-              title="只显示我发布的作业"
-              active={queryParams.byMyself}
-              onClick={() => {
-                setQueryParams((old) => ({ ...old, byMyself: !old.byMyself }))
+        {tab === 'operationSet' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <InputGroup
+              className="max-w-md [&>input]:!rounded-md"
+              placeholder={t.components.Operations.search_placeholder}
+              leftIcon="search"
+              large
+              type="search"
+              enterKeyHint="search"
+              defaultValue={queryParams.keyword}
+              onChange={(e) =>
+                debouncedSetQueryParams((old) => ({
+                  ...old,
+                  keyword: e.target.value.trim(),
+                }))
+              }
+              onBlur={() => debouncedSetQueryParams.flush()}
+            />
+            <UserFilter
+              user={selectedUser}
+              onlyFollowing={queryParams.onlyFollowing}
+              onChange={(user) => {
+                setSelectedUser(user)
+                setQueryParams((old) => ({
+                  ...old,
+                  uploaderId: user?.id,
+                  onlyFollowing: undefined,
+                }))
               }}
-            >
-              看看我的
-            </Button>
-          )}
-        </FormGroup>
+              onOnlyFollowingChange={(following) => {
+                setQueryParams((old) => ({
+                  ...old,
+                  onlyFollowing: following || undefined,
+                  uploaderId: undefined,
+                }))
+              }}
+            />
+          </div>
+        )}
       </Card>
 
       <div className="tabular-nums">
-        <OperationList {...queryParams} />
+        {tab === 'operation' && (
+          <OperationList
+            {...queryParams}
+            multiselect={multiselect}
+            operator={operatorFilter.enabled ? operatorFilter : undefined}
+            operatorMatcher={operatorMatcher}
+            // 按热度排序时列表前几页的变化不会太频繁，可以不刷新第一页，节省点流量
+            revalidateFirstPage={queryParams.orderBy !== 'hot'}
+          />
+        )}
+        {tab === 'operationSet' && <OperationSetList {...queryParams} creatorId={queryParams.uploaderId} />}
       </div>
     </>
   )
 })
+Operations.displayName = 'Operations'

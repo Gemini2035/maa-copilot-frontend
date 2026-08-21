@@ -1,13 +1,15 @@
 import { Card, Elevation, Icon } from '@blueprintjs/core'
 
 import clsx from 'clsx'
+import { useAtomValue } from 'jotai'
 
 import type { CopilotDocV1 } from 'models/copilot.schema'
 
-import { OPERATORS, getSkillUsageTitle } from '../../../models/operator'
+import { languageAtom, useTranslation } from '../../../i18n/i18n'
+import { findOperatorByName, getLocalizedOperatorName, getSkillUsageTitle } from '../../../models/operator'
+import { OperatorAvatar } from '../../OperatorAvatar'
 import { SortableItemProps } from '../../dnd'
 import { CardDeleteOption, CardEditOption } from '../CardOptions'
-import { OperatorAvatar } from './EditorOperator'
 
 interface EditorOperatorItemProps extends Partial<SortableItemProps> {
   operator: CopilotDocV1.Operator
@@ -25,15 +27,10 @@ export const EditorOperatorItem = ({
   attributes,
   listeners,
 }: EditorOperatorItemProps) => {
-  const id = OPERATORS.find(({ name }) => name === operator.name)?.id
-  const skillUsage = getSkillUsageTitle(
-    operator.skillUsage as CopilotDocV1.SkillUsageType,
-    operator.skillTimes,
-  )
-
-  const skill = `${
-    [null, '一', '二', '三'][operator.skill ?? 1] ?? '未知'
-  }技能：${skillUsage}`
+  const t = useTranslation()
+  const language = useAtomValue(languageAtom)
+  const id = findOperatorByName(operator.name)?.id
+  const skillUsage = getSkillUsageTitle(operator.skillUsage as CopilotDocV1.SkillUsageType, operator.skillTimes)
 
   return (
     <Card
@@ -53,8 +50,13 @@ export const EditorOperatorItem = ({
       />
       <OperatorAvatar id={id} size="large" />
       <div className="ml-4 flex-grow">
-        <h3 className="font-bold leading-none mb-1">{operator.name}</h3>
-        <div className="text-gray-400 text-xs">{skill}</div>
+        <h3 className="font-bold leading-none mb-1">{getLocalizedOperatorName(operator.name, language)}</h3>
+        <div className="text-gray-400 text-xs">
+          {t.components.editor.operator.EditorOperatorItem.skill_number({
+            count: operator.skill,
+          })}
+          : {skillUsage}
+        </div>
       </div>
 
       <CardEditOption active={editing} onClick={onEdit} />

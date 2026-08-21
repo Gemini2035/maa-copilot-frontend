@@ -5,22 +5,56 @@ import { FC } from 'react'
 import { EDifficulty } from 'components/entity/EDifficulty'
 import { Level, OpDifficulty } from 'models/operation'
 
+import { useTranslation } from '../../i18n/i18n'
 import { isCustomLevel } from '../../models/level'
 
-export const ELevel: FC<{
+export const NeoELevel: FC<{
   className?: string
   level: Level
 }> = ({ level }) => {
+  const t = useTranslation()
   let { catOne, catTwo, catThree } = level
 
   if (isCustomLevel(level)) {
-    catOne = '自定义关卡'
+    catOne = t.components.entity.ELevel.custom_level
     catTwo = ''
     catThree = level.name
   }
 
   return (
-    <Tag className="transition border border-solid !text-xs tracking-tight !p-1 leading-none !min-h-0 bg-slate-200 border-slate-300 text-slate-700">
+    <Tag className="transition border border-solid !text-xs tracking-tight !px-2 !py-1 !my-1 leading-none !min-h-0 bg-slate-200 border-slate-300 text-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      <div className="flex items-center">
+        <div className="flex whitespace-pre">
+          <span className="inline-block font-bold my-auto">{catThree}</span>
+          {catTwo && (
+            <>
+              {' | '}
+              <span className="text-xs">{catTwo}</span>
+            </>
+          )}
+          {' | '}
+          <span className="text-xs">{catOne}</span>
+        </div>
+      </div>
+    </Tag>
+  )
+}
+
+export const ELevel: FC<{
+  className?: string
+  level: Level
+}> = ({ level }) => {
+  const t = useTranslation()
+  let { catOne, catTwo, catThree } = level
+
+  if (isCustomLevel(level)) {
+    catOne = t.components.entity.ELevel.custom_level
+    catTwo = ''
+    catThree = level.name
+  }
+
+  return (
+    <Tag className="transition border border-solid !text-xs tracking-tight !p-1 leading-none !min-h-0 dark:bg-slate-900 dark:text-slate-100">
       <div className="flex items-center mx-1">
         <div className="flex flex-col mr-2">
           <H4 className="inline-block font-bold my-auto">{catThree}</H4>

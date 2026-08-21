@@ -1,14 +1,6 @@
-import {
-  Button,
-  Callout,
-  Dialog,
-  Icon,
-  Tab,
-  TabId,
-  Tabs,
-} from '@blueprintjs/core'
+import { Button, Callout, Dialog, Icon, Tab, TabId, Tabs } from '@blueprintjs/core'
 
-import { requestUpdateInfo, requestUpdatePassword } from 'apis/auth'
+import { updatePassword, updateUserInfo } from 'apis/auth'
 import { useAtom } from 'jotai'
 import { FC, useEffect, useState } from 'react'
 import { FieldErrors, useForm } from 'react-hook-form'
@@ -16,6 +8,7 @@ import { useLatest } from 'react-use'
 
 import { AppToaster } from 'components/Toaster'
 
+import { useTranslation } from '../../i18n/i18n'
 import { authAtom } from '../../store/auth'
 import { formatError } from '../../utils/error'
 import { GlobalErrorBoundary } from '../GlobalErrorBoundary'
@@ -28,10 +21,11 @@ interface EditDialogProps {
 }
 
 export const EditDialog: FC<EditDialogProps> = ({ isOpen, onClose }) => {
+  const t = useTranslation()
   const [activeTab, setActiveTab] = useState<TabId>('info')
 
   return (
-    <Dialog title="修改账户信息" icon="user" isOpen={isOpen} onClose={onClose}>
+    <Dialog title={t.components.account.EditDialog.edit_account_info} icon="user" isOpen={isOpen} onClose={onClose}>
       <div className="p-4 pt-2">
         <GlobalErrorBoundary>
           <Tabs
@@ -48,7 +42,7 @@ export const EditDialog: FC<EditDialogProps> = ({ isOpen, onClose }) => {
               title={
                 <div>
                   <Icon icon="manually-entered-data" />
-                  <span className="ml-1">账户信息</span>
+                  <span className="ml-1">{t.components.account.EditDialog.account_info}</span>
                 </div>
               }
               panel={<InfoPanel onClose={onClose} />}
@@ -58,7 +52,7 @@ export const EditDialog: FC<EditDialogProps> = ({ isOpen, onClose }) => {
               title={
                 <div>
                   <Icon icon="key" />
-                  <span className="ml-1">密码</span>
+                  <span className="ml-1">{t.components.account.EditDialog.password}</span>
                 </div>
               }
               panel={<PasswordPanel onClose={onClose} />}
@@ -71,6 +65,8 @@ export const EditDialog: FC<EditDialogProps> = ({ isOpen, onClose }) => {
 }
 
 const InfoPanel = ({ onClose }) => {
+  const t = useTranslation()
+
   interface FormValues {
     username: string
   }
@@ -92,13 +88,13 @@ const InfoPanel = ({ onClose }) => {
 
   useEffect(() => {
     reset(auth)
-  }, [auth])
+  }, [auth, reset])
 
   const globalError = (errors as FieldErrors<{ global: void }>).global?.message
 
   const onSubmit = handleSubmit(async ({ username }) => {
     try {
-      await requestUpdateInfo({ username })
+      await updateUserInfo({ username })
 
       setAuth({
         ...latestAuth.current,
@@ -107,7 +103,7 @@ const InfoPanel = ({ onClose }) => {
 
       AppToaster.show({
         intent: 'success',
-        message: `更新成功`,
+        message: t.components.account.EditDialog.update_success,
       })
       onClose(false)
     } catch (e) {
@@ -119,16 +115,12 @@ const InfoPanel = ({ onClose }) => {
   return (
     <form>
       {globalError && (
-        <Callout intent="danger" icon="error" title="错误">
+        <Callout intent="danger" icon="error" title={t.components.account.EditDialog.error}>
           {globalError}
         </Callout>
       )}
 
-      <AuthFormUsernameField
-        control={control}
-        error={errors.username}
-        field="username"
-      />
+      <AuthFormUsernameField control={control} error={errors.username} field="username" />
 
       <div className="mt-6 flex justify-end">
         <Button
@@ -143,7 +135,7 @@ const InfoPanel = ({ onClose }) => {
             onSubmit(e)
           }}
         >
-          保存
+          {t.components.account.EditDialog.save}
         </Button>
       </div>
     </form>
@@ -151,6 +143,8 @@ const InfoPanel = ({ onClose }) => {
 }
 
 const PasswordPanel = ({ onClose }) => {
+  const t = useTranslation()
+
   interface FormValues {
     original: string
     newPassword: string
@@ -169,52 +163,52 @@ const PasswordPanel = ({ onClose }) => {
 
   const globalError = (errors as FieldErrors<{ global: void }>).global?.message
 
-  const onSubmit = handleSubmit(
-    async ({ original, newPassword, newPassword2 }) => {
-      if (newPassword !== newPassword2) {
-        setError('newPassword2', { message: '两次输入的密码不一致' })
-        return
-      }
+  const onSubmit = handleSubmit(async ({ original, newPassword, newPassword2 }) => {
+    if (newPassword !== newPassword2) {
+      setError('newPassword2', {
+        message: t.components.account.EditDialog.passwords_dont_match,
+      })
+      return
+    }
 
-      try {
-        await requestUpdatePassword({ original, newPassword })
+    try {
+      await updatePassword({ originalPassword: original, newPassword })
 
-        AppToaster.show({
-          intent: 'success',
-          message: `更新成功`,
-        })
-        onClose(false)
-      } catch (e) {
-        console.warn(e)
-        setError('global' as any, { message: formatError(e) })
-      }
-    },
-  )
+      AppToaster.show({
+        intent: 'success',
+        message: t.components.account.EditDialog.update_success,
+      })
+      onClose(false)
+    } catch (e) {
+      console.warn(e)
+      setError('global' as any, { message: formatError(e) })
+    }
+  })
 
   return (
     <>
       <form>
         {globalError && (
-          <Callout intent="danger" icon="error" title="错误">
+          <Callout intent="danger" icon="error" title={t.components.account.EditDialog.error}>
             {globalError}
           </Callout>
         )}
 
         <AuthFormPasswordField
-          label="当前密码"
+          label={t.components.account.EditDialog.current_password}
           field="original"
           control={control}
           error={errors.original}
         />
         <AuthFormPasswordField
-          label="新密码"
+          label={t.components.account.EditDialog.new_password}
           field="newPassword"
           control={control}
           error={errors.newPassword}
           autoComplete="off"
         />
         <AuthFormPasswordField
-          label="确认新密码"
+          label={t.components.account.EditDialog.confirm_new_password}
           field="newPassword2"
           control={control}
           error={errors.newPassword2}
@@ -222,13 +216,8 @@ const PasswordPanel = ({ onClose }) => {
         />
 
         <div className="mt-6 flex justify-end">
-          <Button
-            minimal
-            className="mr-2"
-            icon="key"
-            onClick={() => setResetPasswordDialogOpen(true)}
-          >
-            忘记密码...
+          <Button minimal className="mr-2" icon="key" onClick={() => setResetPasswordDialogOpen(true)}>
+            {t.components.account.EditDialog.forgot_password}
           </Button>
           <Button
             disabled={!isDirty || isSubmitting}
@@ -242,15 +231,12 @@ const PasswordPanel = ({ onClose }) => {
               onSubmit(e)
             }}
           >
-            保存
+            {t.components.account.EditDialog.save}
           </Button>
         </div>
       </form>
 
-      <ResetPasswordDialog
-        isOpen={resetPasswordDialogOpen}
-        onClose={() => setResetPasswordDialogOpen(false)}
-      />
+      <ResetPasswordDialog isOpen={resetPasswordDialogOpen} onClose={() => setResetPasswordDialogOpen(false)} />
     </>
   )
 }

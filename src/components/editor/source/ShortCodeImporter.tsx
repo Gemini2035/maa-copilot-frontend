@@ -1,10 +1,11 @@
 import { Button, Dialog, InputGroup, MenuItem } from '@blueprintjs/core'
 
+import { getOperation } from 'apis/operation'
 import { FC, useState } from 'react'
 import { useController, useForm } from 'react-hook-form'
 
-import { requestGetOperation } from '../../../apis/copilotOperation'
-import { parseShortCode } from '../../../models/shortCode'
+import { useTranslation } from '../../../i18n/i18n'
+import { parseShortCode, useNewShortCodeProtocol } from '../../../models/shortCode'
 import { formatError } from '../../../utils/error'
 import { FormField2 } from '../../FormField'
 
@@ -15,6 +16,7 @@ interface ShortCodeForm {
 export const ShortCodeImporter: FC<{
   onImport: (content: string) => void
 }> = ({ onImport }) => {
+  const t = useTranslation()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pending, setPending] = useState(false)
 
@@ -31,7 +33,7 @@ export const ShortCodeImporter: FC<{
     control,
     name: 'code',
     rules: {
-      required: '请输入神秘代码',
+      required: t.components.editor.source.ShortCodeImporter.enter_shortcode,
     },
   })
 
@@ -39,27 +41,34 @@ export const ShortCodeImporter: FC<{
     try {
       setPending(true)
 
-      const id = parseShortCode(code)
+      const shortCodeContent = parseShortCode(code)
 
-      if (!id) {
-        throw new Error('无效的神秘代码')
+      // 导入只处理作业：拒绝作业集代码（prts://s），兼容旧 maa:// 与 prts://
+      if (!shortCodeContent || shortCodeContent.type === 'operation-set') {
+        throw new Error(t.components.editor.source.ShortCodeImporter.invalid_shortcode)
       }
 
-      let operationContent = (await requestGetOperation(id)).data.content
+      const { id } = shortCodeContent
+      const operationContent = (await getOperation({ id })).parsedContent
 
-      // prettify JSON
-      operationContent = JSON.stringify(JSON.parse(operationContent), null, 2)
+      if (operationContent.doc.title === t.models.converter.invalid_operation_content) {
+        throw new Error(t.components.editor.source.ShortCodeImporter.cannot_parse_content)
+      }
 
       // deal with race condition
       if (!dialogOpen) {
         return
       }
 
-      onImport(operationContent)
+      const prettifiedJson = JSON.stringify(operationContent, null, 2)
+
+      onImport(prettifiedJson)
       setDialogOpen(false)
     } catch (e) {
       console.warn(e)
-      setError('code', { message: '加载失败：' + formatError(e) })
+      setError('code', {
+        message: t.components.editor.source.ShortCodeImporter.load_failed + formatError(e),
+      })
     } finally {
       setPending(false)
     }
@@ -69,44 +78,37 @@ export const ShortCodeImporter: FC<{
     <>
       <MenuItem
         icon="backlink"
-        text="导入神秘代码..."
+        text={t.components.editor.source.ShortCodeImporter.import_shortcode}
         shouldDismissPopover={false}
         onClick={() => setDialogOpen(true)}
       />
       <Dialog
         className="w-full max-w-xl"
         isOpen={dialogOpen}
-        title="导入神秘代码"
+        title={t.components.editor.source.ShortCodeImporter.import_shortcode_title}
         icon="backlink"
         onClose={() => {
           setPending(false)
           setDialogOpen(false)
         }}
       >
-        <form className="flex flex-col px-4 pt-4" onSubmit={onSubmit}>
+        <form className="flex flex-col px-4 pt-4 pb-6" onSubmit={onSubmit}>
           <FormField2
             field="code"
-            label="神秘代码"
-            description="神秘代码可在本站的作业详情中获取"
+            label={t.components.editor.source.ShortCodeImporter.shortcode_label}
+            description={t.components.editor.source.ShortCodeImporter.shortcode_description}
             error={errors.code}
           >
             <InputGroup
               large
-              placeholder="maa://..."
+              placeholder={useNewShortCodeProtocol() ? 'prts://...' : 'maa://...'}
               value={value || ''}
               onChange={onChange}
             />
           </FormField2>
 
-          <Button
-            disabled={!isValid && !isDirty}
-            intent="primary"
-            loading={pending}
-            type="submit"
-            icon="import"
-            large
-          >
-            导入
+          <Button disabled={!isValid && !isDirty} intent="primary" loading={pending} type="submit" icon="import" large>
+            {t.components.editor.source.ShortCodeImporter.import_button}
           </Button>
         </form>
       </Dialog>

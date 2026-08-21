@@ -1,12 +1,5 @@
 import { NonIdealState } from '@blueprintjs/core'
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core'
+import { DndContext, DragEndEvent, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 
 import { uniqueId, unset } from 'lodash-es'
@@ -15,6 +8,7 @@ import { Control, useFieldArray } from 'react-hook-form'
 
 import type { CopilotDocV1 } from 'models/copilot.schema'
 
+import { useTranslation } from '../../../i18n/i18n'
 import { Sortable } from '../../dnd'
 import { EditorActionAdd, EditorActionAddProps } from './EditorActionAdd'
 import { EditorActionItem } from './EditorActionItem'
@@ -30,6 +24,7 @@ const getId = (action: CopilotDocV1.Action) => {
 }
 
 export const EditorActions = ({ control }: EditorActionsProps) => {
+  const t = useTranslation()
   const [draggingAction, setDraggingAction] = useState<CopilotDocV1.Action>()
 
   const { fields, append, insert, update, move, remove } = useFieldArray({
@@ -42,8 +37,7 @@ export const EditorActions = ({ control }: EditorActionsProps) => {
 
   const [editingAction, setEditingAction] = useState<CopilotDocV1.Action>()
 
-  const isEditing = (action: CopilotDocV1.Action) =>
-    editingAction?._id === action._id
+  const isEditing = (action: CopilotDocV1.Action) => editingAction?._id === action._id
 
   const sensors = useSensors(useSensor(PointerSensor))
 
@@ -82,7 +76,9 @@ export const EditorActions = ({ control }: EditorActionsProps) => {
         update(index, action)
         setEditingAction(undefined)
       } else {
-        setError('global' as any, { message: '未能找到要更新的动作' })
+        setError('global' as any, {
+          message: t.components.editor.action.EditorActions.update_action_not_found,
+        })
         return false
       }
     } else {
@@ -98,7 +94,7 @@ export const EditorActions = ({ control }: EditorActionsProps) => {
       <div className="md:w-1/2 md:mr-8 w-full">
         <EditorActionAdd
           control={control}
-          action={editingAction}
+          editingAction={editingAction}
           onSubmit={onSubmit}
           onCancel={() => setEditingAction(undefined)}
         />
@@ -113,46 +109,32 @@ export const EditorActions = ({ control }: EditorActionsProps) => {
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragEnd}
           >
-            <SortableContext
-              items={actions.map(getId)}
-              strategy={verticalListSortingStrategy}
-            >
+            <SortableContext items={actions.map(getId)} strategy={verticalListSortingStrategy}>
               <ul>
                 {actions.map((action, i) => (
-                  <li key={getId(action)} className="mt-2">
-                    <Sortable id={getId(action)}>
-                      {(attrs) => (
-                        <EditorActionItem
-                          action={action}
-                          editing={isEditing(action)}
-                          onEdit={() =>
-                            setEditingAction(
-                              isEditing(action) ? undefined : action,
-                            )
-                          }
-                          onDuplicate={() => handleDuplicate(i)}
-                          onRemove={() => remove(i)}
-                          {...attrs}
-                        />
-                      )}
-                    </Sortable>
-                  </li>
+                  <Sortable id={getId(action)} key={getId(action)} className="mt-2">
+                    {(attrs) => (
+                      <EditorActionItem
+                        action={action}
+                        editing={isEditing(action)}
+                        onEdit={() => setEditingAction(isEditing(action) ? undefined : action)}
+                        onDuplicate={() => handleDuplicate(i)}
+                        onRemove={() => remove(i)}
+                        {...attrs}
+                      />
+                    )}
+                  </Sortable>
                 ))}
               </ul>
             </SortableContext>
 
             <DragOverlay>
-              {draggingAction && (
-                <EditorActionItem
-                  editing={isEditing(draggingAction)}
-                  action={draggingAction}
-                />
-              )}
+              {draggingAction && <EditorActionItem editing={isEditing(draggingAction)} action={draggingAction} />}
             </DragOverlay>
           </DndContext>
 
           {actions.length === 0 && (
-            <NonIdealState title="暂无动作" className="" icon="inbox" />
+            <NonIdealState title={t.components.editor.action.EditorActions.no_actions} className="" icon="inbox" />
           )}
         </div>
       </div>

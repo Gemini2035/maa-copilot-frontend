@@ -2,17 +2,15 @@ import { Button, Drawer } from '@blueprintjs/core'
 
 import { FC, useState } from 'react'
 
+import { useTranslation } from '../../../i18n/i18n'
 import { SourceEditor, SourceEditorProps } from './SourceEditor'
 
 interface SourceEditorButtonProps extends SourceEditorProps {
   className?: string
 }
 
-export const SourceEditorButton: FC<SourceEditorButtonProps> = ({
-  className,
-  triggerValidation,
-  ...editorProps
-}) => {
+export const SourceEditorButton: FC<SourceEditorButtonProps> = ({ className, triggerValidation, ...editorProps }) => {
+  const t = useTranslation()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
@@ -20,7 +18,7 @@ export const SourceEditorButton: FC<SourceEditorButtonProps> = ({
       <Button
         className={className}
         icon="manually-entered-data"
-        text="编辑 JSON"
+        text={t.components.editor.source.SourceEditorButton.edit_json}
         onClick={() => {
           // trigger validation on open
           triggerValidation()
@@ -28,12 +26,7 @@ export const SourceEditorButton: FC<SourceEditorButtonProps> = ({
         }}
       />
       <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        {drawerOpen && (
-          <SourceEditor
-            triggerValidation={triggerValidation}
-            {...editorProps}
-          />
-        )}
+        {drawerOpen && <SourceEditor triggerValidation={triggerValidation} {...editorProps} />}
       </Drawer>
     </>
   )

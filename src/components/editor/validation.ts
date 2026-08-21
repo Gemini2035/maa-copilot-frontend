@@ -1,26 +1,17 @@
 import ajvLocalizeZh from 'ajv-i18n/localize/zh'
-import {
-  DeepPartial,
-  ErrorOption,
-  FieldPath,
-  UseFormSetError,
-} from 'react-hook-form'
+import { DeepPartial, ErrorOption, FieldPath, UseFormSetError } from 'react-hook-form'
 
 import { CopilotDocV1 } from 'models/copilot.schema'
 
+import { i18n } from '../../i18n/i18n'
 import { copilotSchemaValidator } from '../../models/copilot.schema.validator'
-import {
-  findActionType,
-  validTypesFollowingBulletTime,
-} from '../../models/types'
+import { findActionType, validTypesFollowingBulletTime } from '../../models/types'
 
 export function validateOperation(
   operation: DeepPartial<CopilotDocV1.OperationSnakeCased>,
   setError: UseFormSetError<CopilotDocV1.Operation>,
 ): boolean {
-  const errors: Partial<
-    Record<FieldPath<CopilotDocV1.Operation> | 'global', ErrorOption>
-  > = {}
+  const errors: Partial<Record<FieldPath<CopilotDocV1.Operation> | 'global', ErrorOption>> = {}
   const globalErrors: string[] = []
 
   const { actions, groups } = operation
@@ -28,7 +19,11 @@ export function validateOperation(
   const emptyGroup = groups?.find((group) => (group?.opers?.length || 0) === 0)
 
   if (emptyGroup) {
-    globalErrors.push(`干员组“${emptyGroup.name}”不能为空`)
+    globalErrors.push(
+      i18n.components.editor.validation.empty_group({
+        name: emptyGroup.name || '',
+      }),
+    )
   }
 
   if (actions) {
@@ -40,11 +35,13 @@ export function validateOperation(
 
         if (!nextType || !validTypesFollowingBulletTime.includes(nextType)) {
           globalErrors.push(
-            `第${i + 1}个动作是“${
-              findActionType(action.type).alternativeValue
-            }”，但它的下一个动作不是“${validTypesFollowingBulletTime
-              .map((type) => findActionType(type).alternativeValue)
-              .join('”、“')}”其中之一`,
+            i18n.components.editor.validation.bullet_time_error({
+              index: i + 1,
+              actionType: findActionType(action.type).alternativeValue,
+              validTypes: validTypesFollowingBulletTime
+                .map((type) => findActionType(type).alternativeValue)
+                .join(i18n.components.editor.validation.bullet_time_separator),
+            }),
           )
         }
       }
@@ -61,19 +58,14 @@ export function validateOperation(
     },
   }
 
-  const jsonSchemaValidation = copilotSchemaValidator.validate(
-    'copilot',
-    operation,
-  )
-  console.log(
-    'jsonSchemaValidationResult',
-    jsonSchemaValidation,
-    'errors',
-    copilotSchemaValidator.errors,
-  )
+  const jsonSchemaValidation = copilotSchemaValidator.validate('copilot', operation)
+  console.log('jsonSchemaValidationResult', jsonSchemaValidation, 'errors', copilotSchemaValidator.errors)
 
   if (!jsonSchemaValidation && copilotSchemaValidator.errors) {
-    ajvLocalizeZh(copilotSchemaValidator.errors)
+    if (i18n.essentials.language === '简体中文') {
+      ajvLocalizeZh(copilotSchemaValidator.errors)
+    }
+
     globalErrors.push(
       copilotSchemaValidator.errorsText(undefined, {
         separator: '\n',
@@ -86,9 +78,7 @@ export function validateOperation(
   }
 
   if (Object.keys(errors).length > 0) {
-    Object.entries(errors).forEach(
-      ([key, value]) => value && setError(key as any, value),
-    )
+    Object.entries(errors).forEach(([key, value]) => value && setError(key as any, value))
     return false
   }
 

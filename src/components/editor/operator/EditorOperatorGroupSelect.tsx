@@ -2,6 +2,7 @@ import { MenuItem } from '@blueprintjs/core'
 
 import { useController } from 'react-hook-form'
 
+import { useTranslation } from '../../../i18n/i18n'
 import { CopilotDocV1 } from '../../../models/copilot.schema'
 import { Suggest } from '../../Suggest'
 import { EditorFieldProps } from '../EditorFieldProps'
@@ -14,11 +15,9 @@ interface Props extends EditorFieldProps<EditorOperatorFormValues, string> {
 
 const createArbitraryGroup = (name: string) => ({ name })
 
-export const EditorOperatorGroupSelect = ({
-  className,
-  groups,
-  ...controllerProps
-}: Props) => {
+export const EditorOperatorGroupSelect = ({ className, groups, ...controllerProps }: Props) => {
+  const t = useTranslation()
+
   const {
     field: { onChange, onBlur, value },
     fieldState,
@@ -29,9 +28,7 @@ export const EditorOperatorGroupSelect = ({
   return (
     <Suggest<CopilotDocV1.Group>
       items={groups}
-      itemListPredicate={(query) =>
-        query ? groups.filter((group) => group.name.includes(query)) : groups
-      }
+      itemListPredicate={(query) => (query ? groups.filter((group) => group.name.includes(query)) : groups)}
       fieldState={fieldState}
       onReset={() => onChange(undefined)}
       itemRenderer={(item, { handleClick, handleFocus, modifiers }) => (
@@ -51,15 +48,15 @@ export const EditorOperatorGroupSelect = ({
       createNewItemRenderer={(query, active, handleClick) => (
         <MenuItem
           key="create-new-item"
-          text={`创建新的干员组 "${query}"`}
+          text={t.components.editor.operator.EditorOperatorGroupSelect.create_new_group({ query })}
           icon="text-highlight"
           onClick={handleClick}
           selected={active}
         />
       )}
-      noResults={<MenuItem disabled text={`没有匹配的干员组`} />}
+      noResults={<MenuItem disabled text={t.components.editor.operator.EditorOperatorGroupSelect.no_matching_groups} />}
       inputProps={{
-        placeholder: `干员组名`,
+        placeholder: t.components.editor.operator.EditorOperatorGroupSelect.group_name,
         large: true,
         onBlur,
       }}

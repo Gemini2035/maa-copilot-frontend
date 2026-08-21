@@ -1,17 +1,9 @@
-import {
-  Alert,
-  Button,
-  ButtonProps,
-  Callout,
-  H4,
-  Menu,
-  MenuItem,
-} from '@blueprintjs/core'
-import { Popover2 } from '@blueprintjs/popover2'
+import { Alert, Button, ButtonProps, Callout, H4, Menu, MenuItem, PopoverNext } from '@blueprintjs/core'
 
 import { first, isEqual } from 'lodash-es'
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
+import { useTranslation } from '../../i18n/i18n'
 import { formatRelativeTime } from '../../utils/times'
 
 export interface AutosaveOptions<T> {
@@ -31,20 +23,11 @@ interface Record<T> {
 
 type Archive<T> = Record<T>[]
 
-export const isChangedSinceLastSave = (
-  value: unknown,
-  archive: Archive<unknown>,
-) => !isEqual(value, first(archive)?.v)
+export const isChangedSinceLastSave = (value: unknown, archive: Archive<unknown>) => !isEqual(value, first(archive)?.v)
 
 export function useAutosave<T>(
   getValue: () => T,
-  {
-    key,
-    interval,
-    limit,
-    shouldSave = isChangedSinceLastSave,
-    onSave,
-  }: AutosaveOptions<T>,
+  { key, interval, limit, shouldSave = isChangedSinceLastSave, onSave }: AutosaveOptions<T>,
 ) {
   const [archive, setArchive] = useState<Archive<T>>(() => {
     const initialArchive = localStorage.getItem(key)
@@ -80,10 +63,7 @@ export function useAutosave<T>(
         v: value,
         t: Date.now(),
       }
-      const newArchive = [record, ...(latestArchive.current || [])].slice(
-        0,
-        limit,
-      )
+      const newArchive = [record, ...(latestArchive.current || [])].slice(0, limit)
 
       while (newArchive.length > 0) {
         try {
@@ -101,7 +81,7 @@ export function useAutosave<T>(
         }
       }
     },
-    [limit],
+    [limit, getValue, key, onSave, shouldSave],
   )
 
   useEffect(() => {
@@ -111,14 +91,17 @@ export function useAutosave<T>(
   }, [interval, limit, doSave])
 
   // immediately save and reset the timer
-  const save = (value?: T) => {
-    doSave(value)
-    clearInterval(timer.current)
-    timer.current = setInterval(doSave, interval)
-  }
+  const save = useCallback(
+    (value?: T) => {
+      doSave(value)
+      clearInterval(timer.current)
+      timer.current = setInterval(doSave, interval)
+    },
+    [doSave, interval],
+  )
 
   // trigger save on unmount and page unload
-  useEffect(() => () => save(), [])
+  useEffect(() => () => save(), [save])
   window.addEventListener('beforeunload', () => save())
 
   return {
@@ -141,8 +124,14 @@ export const AutosaveSheet = <T,>({
   onRestore,
   ...buttonProps
 }: AutosaveSheetProps<T>) => {
+  const t = useTranslation()
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false)
   const restoringRecord = useRef<Record<T>>()
+
+  const formatTime = (timestamp?: number) => {
+    if (!timestamp) return ''
+    return formatRelativeTime(timestamp)
+  }
 
   const handleRestore = () => {
     if (restoringRecord.current) {
@@ -154,12 +143,14 @@ export const AutosaveSheet = <T,>({
 
   return (
     <>
-      <Popover2
+      <PopoverNext
         content={
           <>
             <Callout intent="primary">
-              每隔 {~~(interval / 1000 / 60)}{' '}
-              分钟自动保存编辑过的内容，记录上限为 {limit} 条
+              {t.components.editor.useAutosave.autosave_info({
+                minutes: ~~(interval / 1000 / 60),
+                limit,
+              })}
             </Callout>
             <Menu className="mt-2 p-0">
               {archive.map((record) => (
@@ -169,9 +160,7 @@ export const AutosaveSheet = <T,>({
                   text={
                     <>
                       {itemTitle(record)}
-                      <div className="text-xs opacity-75">
-                        {formatRelativeTime(record.t)}
-                      </div>
+                      <div className="text-xs opacity-75">{formatTime(record.t)}</div>
                     </>
                   }
                   key={record.t}
@@ -189,25 +178,27 @@ export const AutosaveSheet = <T,>({
           icon="history"
           text={
             archive.length
-              ? `已自动保存：${formatRelativeTime(first(archive)?.t)}`
-              : '未保存'
+              ? t.components.editor.useAutosave.autosaved_at({
+                  time: formatTime(first(archive)?.t),
+                })
+              : t.components.editor.useAutosave.not_saved
           }
           {...buttonProps}
         />
-      </Popover2>
+      </PopoverNext>
 
       <Alert
         isOpen={restoreDialogOpen}
-        cancelButtonText="取消"
-        confirmButtonText="确定"
+        cancelButtonText={t.components.editor.useAutosave.cancel}
+        confirmButtonText={t.components.editor.useAutosave.confirm}
         icon="rotate-document"
         intent="danger"
         canOutsideClickCancel
         onCancel={() => setRestoreDialogOpen(false)}
         onConfirm={handleRestore}
       >
-        <H4>恢复内容</H4>
-        <p>当前的编辑内容将会被覆盖，确定要恢复内容吗？</p>
+        <H4>{t.components.editor.useAutosave.restore_content}</H4>
+        <p>{t.components.editor.useAutosave.restore_confirmation}</p>
       </Alert>
     </>
   )
